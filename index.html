@@ -1,118 +1,156 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <title>2D House Plan (Orthogonal)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Fabric.js -->
   <script src="https://cdn.jsdelivr.net/npm/fabric@5.3.0/dist/fabric.min.js"></script>
   <style>
-    body { font-family: system-ui, Arial, sans-serif; margin: 0; display: grid; grid-template-columns: 1fr 320px; height: 100vh;}
-    #stageWrap { position: relative; background: #f8f9fb; }
-    #controls { padding: 16px; border-left: 1px solid #e5e7eb; }
-    .row { margin-bottom: 12px; }
-    button { padding: 8px 12px; border: 1px solid #d1d5db; background: white; border-radius: 8px; cursor: pointer;}
-    button.primary { background: #111827; color: #fff; border-color: #111827; }
-    label { font-size: 12px; color: #374151; display:block; margin-bottom: 4px;}
-    input[type="number"] { width:100%; padding:8px; border:1px solid #d1d5db; border-radius:8px; }
-    .stat { font-size: 14px; margin: 8px 0; }
+    :root { --border:#e5e7eb; --text:#111827; --muted:#6b7280; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:var(--text);
+           display:grid; grid-template-columns: 1fr 320px; height:100vh; background:#f8f9fb; }
+    #stageWrap { position:relative; background:#fff; }
+    #controls { padding:16px; border-left:1px solid var(--border); background:#fff; overflow:auto; }
+    h3 { margin:0 0 12px; font-size:18px; }
+    .row { margin-bottom:12px; }
+    label { display:block; font-size:12px; color:#374151; margin-bottom:6px; }
+    input[type="number"], input[type="text"] {
+      width:100%; padding:8px; border:1px solid var(--border); border-radius:8px; background:#fff;
+    }
+    button { padding:8px 12px; border:1px solid var(--border); background:#fff; border-radius:8px; cursor:pointer; }
+    button.primary { background:#111827; color:#fff; border-color:#111827; }
+    .stat { font-size:14px; margin:6px 0; }
+    .hint { font-size:12px; color:var(--muted); }
     canvas { display:block; }
+    @media (max-width: 900px) {
+      body { grid-template-columns: 1fr; grid-template-rows: 60vh 1fr; }
+      #controls { border-left:none; border-top:1px solid var(--border); }
+    }
   </style>
 </head>
 <body>
   <div id="stageWrap">
     <canvas id="c"></canvas>
   </div>
+
   <div id="controls">
     <h3>Plan Controls</h3>
+
     <div class="row">
-      <label>Grid (mm)</label>
+      <label>Grid (mm per grid line)</label>
       <input id="gridMm" type="number" value="100" min="10" step="10">
     </div>
+
     <div class="row">
-      <label>Scale (mm per px)</label>
+      <label>Scale (mm per pixel)</label>
       <input id="scaleMmPerPx" type="number" value="10" min="1" step="1">
     </div>
+
     <div class="row">
       <button id="start">Start Outline</button>
       <button id="close">Close Shape</button>
       <button id="reset">Reset</button>
     </div>
+
     <div class="row">
       <div class="stat"><b>Perimeter:</b> <span id="perim">0.00</span> m</div>
       <div class="stat"><b>Floor area:</b> <span id="area">0.00</span> m²</div>
     </div>
+
     <div class="row">
       <label>Sheets Webhook URL (Apps Script)</label>
       <input id="webhook" type="text" placeholder="https://script.google.com/macros/s/AKfycb.../exec">
     </div>
+
     <div class="row">
       <button class="primary" id="send">Send to Google Sheet</button>
     </div>
-    <p style="font-size:12px;color:#6b7280;">Tip: click to add points; we’ll snap to horizontal/vertical and the grid.</p>
+
+    <p class="hint">Tip: click to place points; segments snap to horizontal/vertical and to the grid.</p>
   </div>
 
   <script>
-    // ---------- CONFIG ----------
+    // =============== CONFIG & STATE ===============
+
     const canvasEl = document.getElementById('c');
     const wrapper = document.getElementById('stageWrap');
     const perimEl = document.getElementById('perim');
-    const areaEl = document.getElementById('area');
+    const areaEl  = document.getElementById('area');
 
-    let SCALE_MM_PER_PX = parseFloat(document.getElementById('scaleMmPerPx').value); // mm per px
-    let GRID_MM = parseFloat(document.getElementById('gridMm').value);
-    let GRID_PX = GRID_MM / SCALE_MM_PER_PX;
+    function sanitizeNumber(n, fallback) {
+      const x = parseFloat(n);
+      return Number.isFinite(x) && x > 0 ? x : fallback;
+    }
 
-    // Fit canvas
+    let SCALE_MM_PER_PX = sanitizeNumber(document.getElementById('scaleMmPerPx').value, 10);
+    let GRID_MM         = sanitizeNumber(document.getElementById('gridMm').value, 100);
+    let GRID_PX         = GRID_MM / SCALE_MM_PER_PX;
+
+    const canvas = new fabric.Canvas('c', { selection: false, backgroundColor: '#fff' });
+
+    let drawing = false;
+    let points = [];          // [{x,y}] (px)
+    let tempLine = null;      // preview segment
+    let polyShape = null;     // final polygon
+
+    // =============== SIZING & GRID =================
+
     function fitCanvas() {
-      canvasEl.width = wrapper.clientWidth;
-      canvasEl.height = wrapper.clientHeight;
-      canvas.setWidth(canvasEl.width);
-      canvas.setHeight(canvasEl.height);
+      const w = wrapper.clientWidth;
+      const h = wrapper.clientHeight;
+
+      // Set element + internal sizes
+      canvas.setDimensions({ width: w, height: h }, { cssOnly: false });
+
+      // Recalculate offsets used by getPointer()
+      canvas.calcOffset();
+
       drawGrid();
       canvas.renderAll();
     }
 
-    const canvas = new fabric.Canvas('c', { selection: false, backgroundColor: '#fff' });
-
-    // Draw grid
     function drawGrid() {
       const w = canvas.getWidth(), h = canvas.getHeight();
-      canvas.backgroundImage = null;
+
+      // Skip if GRID_PX invalid
+      const g = Number.isFinite(GRID_PX) && GRID_PX > 0 ? GRID_PX : 10;
+
       const grid = new fabric.StaticCanvas(null, { width: w, height: h });
-      // light grid
-      for (let x=0; x<=w; x+=GRID_PX) {
-        const line = new fabric.Line([x, 0, x, h], { stroke: '#eef2f7', selectable:false, evented:false });
-        grid.add(line);
+      for (let x = 0; x <= w; x += g) {
+        grid.add(new fabric.Line([x, 0, x, h], { stroke: '#eef2f7', selectable:false, evented:false }));
       }
-      for (let y=0; y<=h; y+=GRID_PX) {
-        const line = new fabric.Line([0, y, w, y], { stroke: '#eef2f7', selectable:false, evented:false });
-        grid.add(line);
+      for (let y = 0; y <= h; y += g) {
+        grid.add(new fabric.Line([0, y, w, y], { stroke: '#eef2f7', selectable:false, evented:false }));
       }
-      canvas.setBackgroundImage(grid.toDataURL(), canvas.renderAll.bind(canvas));
+      canvas.setBackgroundImage(grid.toDataURL(), () => {
+        canvas.renderAll();
+        canvas.calcOffset(); // keep pointer math aligned
+      });
     }
 
     window.addEventListener('resize', fitCanvas);
     fitCanvas();
+    // Ensure offsets after initial paint
+    setTimeout(() => fitCanvas(), 0);
 
-    // ---------- DRAWING STATE ----------
-    let drawing = false;
-    let points = []; // [{x,y}, ...] in px
-    let tempLine = null;
-    let polyShape = null;
+    // =============== HELPERS =======================
 
-    // Helpers
     function snapToGrid(pt) {
+      const g = Number.isFinite(GRID_PX) && GRID_PX > 0 ? GRID_PX : 10;
       return {
-        x: Math.round(pt.x / GRID_PX) * GRID_PX,
-        y: Math.round(pt.y / GRID_PX) * GRID_PX
+        x: Math.round(pt.x / g) * g,
+        y: Math.round(pt.y / g) * g
       };
     }
 
-    // Force orthogonal: next point shares x or y with last point (whichever is closer)
+    // Force orthogonal segment from last → choose nearer axis
     function orthogonalFrom(last, raw) {
       const dx = Math.abs(raw.x - last.x);
       const dy = Math.abs(raw.y - last.y);
       if (dx < dy) return { x: raw.x, y: last.y }; // horizontal
-      return { x: last.x, y: raw.y }; // vertical
+      return { x: last.x, y: raw.y };              // vertical
     }
 
     function pxToMeters(px) {
@@ -120,7 +158,7 @@
     }
 
     function updateMeasurements() {
-      if (points.length < 3) {
+      if (!Array.isArray(points) || points.length < 3) {
         perimEl.textContent = "0.00";
         areaEl.textContent  = "0.00";
         return;
@@ -128,17 +166,15 @@
       // Perimeter
       let periPx = 0;
       for (let i = 0; i < points.length; i++) {
-        const a = points[i];
-        const b = points[(i+1) % points.length];
+        const a = points[i], b = points[(i+1) % points.length];
         periPx += Math.hypot(b.x - a.x, b.y - a.y);
       }
       const periM = pxToMeters(periPx);
 
-      // Area (shoelace)
+      // Area via shoelace
       let sum = 0;
       for (let i = 0; i < points.length; i++) {
-        const a = points[i];
-        const b = points[(i+1) % points.length];
+        const a = points[i], b = points[(i+1) % points.length];
         sum += (a.x * b.y - b.x * a.y);
       }
       const areaPx2 = Math.abs(sum) / 2;
@@ -149,7 +185,6 @@
     }
 
     function redrawPolylinePreview() {
-      // Remove old polyline preview
       canvas.getObjects('polyline').forEach(o => canvas.remove(o));
       if (points.length < 2) return;
 
@@ -161,7 +196,6 @@
     }
 
     function drawPolygonFinal() {
-      // Remove previews
       canvas.getObjects('polyline').forEach(o => canvas.remove(o));
       if (tempLine) { canvas.remove(tempLine); tempLine = null; }
 
@@ -179,10 +213,13 @@
       canvas.renderAll();
     }
 
-    // Click to add points
+    // =============== EVENTS ========================
+
+    // Start placing points
     canvas.on('mouse:down', (opt) => {
       if (!drawing) return;
-      const raw = canvas.getPointer(opt.e);
+      // Use robust pointer (ignoreZoom=true)
+      const raw = canvas.getPointer(opt.e, true);
       const snapped = snapToGrid(raw);
 
       if (points.length === 0) {
@@ -196,11 +233,12 @@
       updateMeasurements();
     });
 
-    // Preview orthogonal segment
+    // Live preview segment
     canvas.on('mouse:move', (opt) => {
       if (!drawing || points.length === 0) return;
+
       const last = points[points.length-1];
-      const raw = canvas.getPointer(opt.e);
+      const raw = canvas.getPointer(opt.e, true);
       const snapped = snapToGrid(raw);
       const ortho = orthogonalFrom(last, snapped);
 
@@ -215,7 +253,8 @@
       canvas.renderAll();
     });
 
-    // Controls
+    // =============== CONTROLS ======================
+
     document.getElementById('start').onclick = () => {
       points = [];
       drawing = true;
@@ -228,11 +267,9 @@
     document.getElementById('close').onclick = () => {
       if (points.length >= 3) {
         drawing = false;
-        // close by connecting to first point orthogonally if needed:
+        // Close to first point with orthogonal leg if needed
         const first = points[0], last = points[points.length-1];
         if (first.x !== last.x && first.y !== last.y) {
-          // pick shortest orthogonal return in two legs
-          // (simple approach: align x, then y)
           points.push({ x:first.x, y:last.y });
         }
         drawPolygonFinal();
@@ -248,30 +285,33 @@
       updateMeasurements();
     };
 
-    // Settings updates
     document.getElementById('scaleMmPerPx').onchange = (e) => {
-      SCALE_MM_PER_PX = parseFloat(e.target.value || '10');
+      SCALE_MM_PER_PX = sanitizeNumber(e.target.value, 10);
       GRID_PX = GRID_MM / SCALE_MM_PER_PX;
       drawGrid();
       updateMeasurements();
     };
+
     document.getElementById('gridMm').onchange = (e) => {
-      GRID_MM = parseFloat(e.target.value || '100');
+      GRID_MM = sanitizeNumber(e.target.value, 100);
       GRID_PX = GRID_MM / SCALE_MM_PER_PX;
       drawGrid();
     };
 
-    // Send to Google Sheets (Apps Script)
+    // =============== SEND TO SHEETS =================
+
     document.getElementById('send').onclick = async () => {
       const url = document.getElementById('webhook').value.trim();
       if (!url) { alert('Add your Apps Script Web App URL first.'); return; }
+
       const payload = {
         perimeter_m: parseFloat(perimEl.textContent),
         area_m2: parseFloat(areaEl.textContent),
         scale_mm_per_px: SCALE_MM_PER_PX,
         grid_mm: GRID_MM,
-        points_px: points // raw px points for reproducibility
+        points_px: points
       };
+
       try {
         const res = await fetch(url, {
           method: 'POST',
