@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>2D House Plan (Orthogonal)</title>
+  <script src="https://cdn.jsdelivr.net/npm/fabric@5.3.0/dist/fabric.min.js"></script>
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin: 0; display: grid; grid-template-columns: 1fr 320px; height: 100vh;}
+    #stageWrap { position: relative; background: #f8f9fb; }
+    #controls { padding: 16px; border-left: 1px solid #e5e7eb; }
+    .row { margin-bottom: 12px; }
+    button { padding: 8px 12px; border: 1px solid #d1d5db; background: white; border-radius: 8px; cursor: pointer;}
+    button.primary { background: #111827; color: #fff; border-color: #111827; }
+    label { font-size: 12px; color: #374151; display:block; margin-bottom: 4px;}
+    input[type="number"] { width:100%; padding:8px; border:1px solid #d1d5db; border-radius:8px; }
+    .stat { font-size: 14px; margin: 8px 0; }
+    canvas { display:block; }
+  </style>
+</head>
+<body>
+  <div id="stageWrap">
+    <canvas id="c"></canvas>
+  </div>
+  <div id="controls">
+    <h3>Plan Controls</h3>
+    <div class="row">
+      <label>Grid (mm)</label>
+      <input id="gridMm" type="number" value="100" min="10" step="10">
+    </div>
+    <div class="row">
+      <label>Scale (mm per px)</label>
+      <input id="scaleMmPerPx" type="number" value="10" min="1" step="1">
+    </div>
+    <div class="row">
+      <button id="start">Start Outline</button>
+      <button id="close">Close Shape</button>
+      <button id="reset">Reset</button>
+    </div>
+    <div class="row">
+      <div class="stat"><b>Perimeter:</b> <span id="perim">0.00</span> m</div>
+      <div class="stat"><b>Floor area:</b> <span id="area">0.00</span> m²</div>
+    </div>
+    <div class="row">
+      <label>Sheets Webhook URL (Apps Script)</label>
+      <input id="webhook" type="text" placeholder="https://script.google.com/macros/s/AKfycb.../exec">
+    </div>
+    <div class="row">
+      <button class="primary" id="send">Send to Google Sheet</button>
+    </div>
+    <p style="font-size:12px;color:#6b7280;">Tip: click to add points; we’ll snap to horizontal/vertical and the grid.</p>
+  </div>
+
+  <script>
+    // ---------- CONFIG ----------
+    const canvasEl = document.getElementById('c');
+    const wrapper = document.getElementById('stageWrap');
+    const perimEl = document.getElementById('perim');
+    const areaEl = document.getElementById('area');
+
+    let SCALE_MM_PER_PX = parseFloat(document.getElementById('scaleMmPerPx').value); // mm per px
+    let GRID_MM = parseFloat(document.getElementById('gridMm').value);
+    let GRID_PX = GRID_MM / SCALE_MM_PER_PX;
+
+    // Fit canvas
+    function fitCanvas() {
+      canvasEl.width = wrapper.clientWidth;
+      canvasEl.height = wrapper.clientHeight;
+      canvas.setWidth(canvasEl.width);
+      canvas.setHeight(canvasEl.height);
+      drawGrid();
+      canvas.renderAll();
+    }
+
+    const canvas = new fabric.Canvas('c', { selection: false, backgroundColor: '#fff' });
+
+    // Draw grid
+    function drawGrid() {
+      const w = canvas.getWidth(), h = canvas.getHeight();
+      canvas.backgroundImage = null;
+      const grid = new fabric.StaticCanvas(null, { width: w, height: h });
+      // light grid
+      for (let x=0; x<=w; x+=GRID_PX) {
+        const line = new fabric.Line([x, 0, x, h], { stroke: '#eef2f7', selectable:false, evented:false });
+        grid.add(line);
+      }
+      for (let y=0; y<=h; y+=GRID_PX) {
+        const line = new fabric.Line([0, y, w, y], { stroke: '#eef2f7', selectable:false, evented:false });
+        grid.add(line);
+      }
+      canvas.setBackgroundImage(grid.toDataURL(), canvas.renderAll.bind(canvas));
+    }
+
+    window.addEventListener('resize', fitCanvas);
+    fitCanvas();
+
+    // ---------- DRAWING STATE ----------
+    let drawing = false;
+    let points = []; // [{x,y}, ...] in px
+    let tempLine = null;
+    let polyShape = null;
+
+    // Helpers
+    function snapToGrid(pt) {
+      return {
+        x: Math.round(pt.x / GRID_PX) * GRID_PX,
+        y: Math.round(pt.y / GRID_PX) * GRID_PX
+      };
+    }
+
+    // Force orthogonal: next point shares x or y with last point (whichever is closer)
+    function orthogonalFrom(last, raw) {
+      const dx = Math.abs(raw.x - last.x);
+      const dy = Math.abs(raw.y - last.y);
+      if (dx < dy) return { x: raw.x, y: last.y }; // horizontal
+      return { x: last.x, y: raw.y }; // vertical
+    }
+
+    function pxToMeters(px) {
+      return (px * SCALE_MM_PER_PX) / 1000.0;
+    }
+
+    function updateMeasurements() {
+      if (points.length < 3) {
+        perimEl.textContent = "0.00";
+        areaEl.textContent  = "0.00";
+        return;
+      }
+      // Perimeter
+      let periPx = 0;
+      for (let i = 0; i < points.length; i++) {
+        const a = points[i];
+        const b = points[(i+1) % points.length];
+        periPx += Math.hypot(b.x - a.x, b.y - a.y);
+      }
+      const periM = pxToMeters(periPx);
+
+      // Area (shoelace)
+      let sum = 0;
+      for (let i = 0; i < points.length; i++) {
+        const a = points[i];
+        const b = points[(i+1) % points.length];
+        sum += (a.x * b.y - b.x * a.y);
+      }
+      const areaPx2 = Math.abs(sum) / 2;
+      const areaM2 = areaPx2 * Math.pow(SCALE_MM_PER_PX/1000, 2);
+
+      perimEl.textContent = periM.toFixed(2);
+      areaEl.textContent  = areaM2.toFixed(2);
+    }
+
+    function redrawPolylinePreview() {
+      // Remove old polyline preview
+      canvas.getObjects('polyline').forEach(o => canvas.remove(o));
+      if (points.length < 2) return;
+
+      const polyline = new fabric.Polyline(points.map(p => ({x:p.x,y:p.y})), {
+        stroke: '#111827', strokeWidth: 2, fill: null, selectable: false, evented: false
+      });
+      canvas.add(polyline);
+      canvas.sendToBack(polyline);
+    }
+
+    function drawPolygonFinal() {
+      // Remove previews
+      canvas.getObjects('polyline').forEach(o => canvas.remove(o));
+      if (tempLine) { canvas.remove(tempLine); tempLine = null; }
+
+      if (polyShape) canvas.remove(polyShape);
+      polyShape = new fabric.Polygon(points, {
+        fill: 'rgba(59,130,246,0.12)',
+        stroke: '#2563eb',
+        strokeWidth: 2,
+        objectCaching: false,
+        selectable: true
+      });
+      canvas.add(polyShape);
+      canvas.setActiveObject(polyShape);
+      updateMeasurements();
+      canvas.renderAll();
+    }
+
+    // Click to add points
+    canvas.on('mouse:down', (opt) => {
+      if (!drawing) return;
+      const raw = canvas.getPointer(opt.e);
+      const snapped = snapToGrid(raw);
+
+      if (points.length === 0) {
+        points.push(snapped);
+      } else {
+        const ortho = orthogonalFrom(points[points.length-1], snapped);
+        const finalPt = snapToGrid(ortho);
+        points.push(finalPt);
+      }
+      redrawPolylinePreview();
+      updateMeasurements();
+    });
+
+    // Preview orthogonal segment
+    canvas.on('mouse:move', (opt) => {
+      if (!drawing || points.length === 0) return;
+      const last = points[points.length-1];
+      const raw = canvas.getPointer(opt.e);
+      const snapped = snapToGrid(raw);
+      const ortho = orthogonalFrom(last, snapped);
+
+      if (!tempLine) {
+        tempLine = new fabric.Line([last.x, last.y, ortho.x, ortho.y], {
+          stroke: '#ef4444', strokeDashArray: [4,4], selectable:false, evented:false
+        });
+        canvas.add(tempLine);
+      } else {
+        tempLine.set({ x1: last.x, y1: last.y, x2: ortho.x, y2: ortho.y });
+      }
+      canvas.renderAll();
+    });
+
+    // Controls
+    document.getElementById('start').onclick = () => {
+      points = [];
+      drawing = true;
+      if (polyShape) { canvas.remove(polyShape); polyShape = null; }
+      canvas.getObjects('polyline').forEach(o => canvas.remove(o));
+      if (tempLine) { canvas.remove(tempLine); tempLine = null; }
+      updateMeasurements();
+    };
+
+    document.getElementById('close').onclick = () => {
+      if (points.length >= 3) {
+        drawing = false;
+        // close by connecting to first point orthogonally if needed:
+        const first = points[0], last = points[points.length-1];
+        if (first.x !== last.x && first.y !== last.y) {
+          // pick shortest orthogonal return in two legs
+          // (simple approach: align x, then y)
+          points.push({ x:first.x, y:last.y });
+        }
+        drawPolygonFinal();
+      }
+    };
+
+    document.getElementById('reset').onclick = () => {
+      drawing = false;
+      points = [];
+      canvas.clear();
+      drawGrid();
+      polyShape = null; tempLine = null;
+      updateMeasurements();
+    };
+
+    // Settings updates
+    document.getElementById('scaleMmPerPx').onchange = (e) => {
+      SCALE_MM_PER_PX = parseFloat(e.target.value || '10');
+      GRID_PX = GRID_MM / SCALE_MM_PER_PX;
+      drawGrid();
+      updateMeasurements();
+    };
+    document.getElementById('gridMm').onchange = (e) => {
+      GRID_MM = parseFloat(e.target.value || '100');
+      GRID_PX = GRID_MM / SCALE_MM_PER_PX;
+      drawGrid();
+    };
+
+    // Send to Google Sheets (Apps Script)
+    document.getElementById('send').onclick = async () => {
+      const url = document.getElementById('webhook').value.trim();
+      if (!url) { alert('Add your Apps Script Web App URL first.'); return; }
+      const payload = {
+        perimeter_m: parseFloat(perimEl.textContent),
+        area_m2: parseFloat(areaEl.textContent),
+        scale_mm_per_px: SCALE_MM_PER_PX,
+        grid_mm: GRID_MM,
+        points_px: points // raw px points for reproducibility
+      };
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        alert('Sent to Google Sheet!\n\n' + text);
+      } catch (err) {
+        alert('Failed to send: ' + err.message);
+      }
+    };
+  </script>
+</body>
+</html>
