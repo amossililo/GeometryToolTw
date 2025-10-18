@@ -1,330 +1,389 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>2D House Plan (Orthogonal)</title>
+  <title>Orthogonal Plan Sketcher (MVP)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- Fabric.js -->
+  <!-- Fabric.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/fabric@5.3.0/dist/fabric.min.js"></script>
   <style>
-    :root { --border:#e5e7eb; --text:#111827; --muted:#6b7280; }
-    * { box-sizing: border-box; }
-    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:var(--text);
-           display:grid; grid-template-columns: 1fr 320px; height:100vh; background:#f8f9fb; }
-    #stageWrap { position:relative; background:#fff; }
-    #controls { padding:16px; border-left:1px solid var(--border); background:#fff; overflow:auto; }
-    h3 { margin:0 0 12px; font-size:18px; }
-    .row { margin-bottom:12px; }
-    label { display:block; font-size:12px; color:#374151; margin-bottom:6px; }
-    input[type="number"], input[type="text"] {
-      width:100%; padding:8px; border:1px solid var(--border); border-radius:8px; background:#fff;
-    }
-    button { padding:8px 12px; border:1px solid var(--border); background:#fff; border-radius:8px; cursor:pointer; }
-    button.primary { background:#111827; color:#fff; border-color:#111827; }
-    .stat { font-size:14px; margin:6px 0; }
-    .hint { font-size:12px; color:var(--muted); }
-    canvas { display:block; }
-    @media (max-width: 900px) {
-      body { grid-template-columns: 1fr; grid-template-rows: 60vh 1fr; }
-      #controls { border-left:none; border-top:1px solid var(--border); }
-    }
+    :root { --panel: #0f172a; --ink:#e2e8f0; --ink2:#94a3b8; --accent:#22c55e; }
+    * { box-sizing: border-box; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial; }
+    body { margin: 0; display: grid; grid-template-columns: 320px 1fr; height: 100svh; color: var(--ink); background: #0b1020; }
+    aside { background: linear-gradient(180deg, #0f172a, #0b1020); border-right: 1px solid #1e293b; padding: 16px; display: grid; grid-template-rows: auto 1fr auto; gap: 16px; }
+    h1 { margin: 0; font-size: 18px; letter-spacing:.3px; }
+    .card { border: 1px solid #1f2937; border-radius: 14px; padding: 12px; background: #0c1326; }
+    label { font-size: 12px; color: var(--ink2); display: block; margin-bottom: 6px; }
+    input, select, button { width: 100%; padding: 10px 12px; border-radius: 12px; border: 1px solid #28344a; background: #0b152e; color: var(--ink); outline: none; }
+    input:focus, select:focus { border-color: #33507b; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .pill { display: inline-flex; gap:8px; align-items:center; padding: 6px 10px; border-radius: 999px; border:1px solid #2b3750; background:#0a1326; font-size:12px; }
+    .tool { display:flex; align-items:center; gap:8px; padding:10px; border:1px dashed #334155; border-radius:12px; cursor:grab; user-select:none; margin-top:8px; }
+    .tool:active { cursor:grabbing; }
+    .muted { color: var(--ink2); font-size: 12px; }
+    main { position: relative; display:grid; grid-template-rows:auto 1fr auto; }
+    .toolbar { display:flex; gap:8px; padding:10px; border-bottom:1px solid #1f2937; background:#0c1326; }
+    .toolbar button { width:auto; }
+    .status { padding:10px; display:flex; gap:16px; border-top:1px solid #1f2937; background:#0c1326; font-size:13px; color:var(--ink2); }
+    #stageWrap { position: relative; }
+    canvas { display:block; background:#0a0f1f; }
+    .metric { color:#cbd5e1; }
+    .ok { background: linear-gradient(90deg, #065f46, #14532d); border-color:#064e3b; }
   </style>
 </head>
 <body>
-  <div id="stageWrap">
-    <canvas id="c"></canvas>
-  </div>
-
-  <div id="controls">
-    <h3>Plan Controls</h3>
-
-    <div class="row">
-      <label>Grid (mm per grid line)</label>
-      <input id="gridMm" type="number" value="100" min="10" step="10">
+  <aside>
+    <div>
+      <h1>Plan Builder</h1>
+      <p class="muted">Drag a line from here → drop it on the canvas. Grid is in <b>units</b> (you choose scale).</p>
     </div>
 
-    <div class="row">
-      <label>Scale (mm per pixel)</label>
-      <input id="scaleMmPerPx" type="number" value="10" min="1" step="1">
+    <div class="card">
+      <div class="row">
+        <div>
+          <label>Orientation</label>
+          <select id="orientation">
+            <option value="H">Horizontal</option>
+            <option value="V">Vertical</option>
+          </select>
+        </div>
+        <div>
+          <label>Length (units)</label>
+          <input id="length" type="number" min="1" step="1" value="300" />
+        </div>
+      </div>
+
+      <div id="draggableTool" class="tool" draggable="true" title="Drag me to the canvas">
+        ➕ Add Segment
+        <span class="pill"><span id="oriPill">H</span> • <span id="lenPill">300</span>u</span>
+      </div>
+
+      <div style="margin-top:12px">
+        <label>Grid size (units per cell)</label>
+        <input id="grid" type="number" min="1" step="1" value="25" />
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button id="applyGrid">Apply Grid</button>
+        <button id="clearAll">Clear</button>
+      </div>
     </div>
 
-    <div class="row">
-      <button id="start">Start Outline</button>
-      <button id="close">Close Shape</button>
-      <button id="reset">Reset</button>
+    <div class="card">
+      <label>Scale (display only)</label>
+      <div class="row">
+        <input id="unitName" placeholder="e.g., mm, cm, m" value="mm" />
+        <input id="unitPerCell" type="number" min="1" step="1" value="100" title="How many real units per grid cell?" />
+      </div>
+      <p class="muted" style="margin-top:8px">E.g., if 1 cell = 100 mm, a 300-unit line is 3 cells = 300 mm.</p>
+      <button id="closeShape" class="ok">Close Shape & Compute</button>
+      <button id="exportJSON" style="margin-top:8px">Export JSON</button>
+      <button id="sendSheets" style="margin-top:8px">Send to Google Sheets</button>
     </div>
+  </aside>
 
-    <div class="row">
-      <div class="stat"><b>Perimeter:</b> <span id="perim">0.00</span> m</div>
-      <div class="stat"><b>Floor area 12:36:</b> <span id="area">0.00</span> m²</div>
+  <main>
+    <div class="toolbar">
+      <span class="pill">Snap-to-grid</span>
+      <span class="pill">Orthogonal only</span>
+      <span class="pill">Drag from sidebar → drop to place</span>
     </div>
-
-    <div class="row">
-      <label>Sheets Webhook URL (Apps Script)</label>
-      <input id="webhook" type="text" placeholder="https://script.google.com/macros/s/AKfycb.../exec">
+    <div id="stageWrap">
+      <canvas id="c" width="1400" height="900"></canvas>
     </div>
-
-    <div class="row">
-      <button class="primary" id="send">Send to Google Sheet</button>
+    <div class="status">
+      <div>Segments: <span class="metric" id="segCount">0</span></div>
+      <div>External Perimeter: <span class="metric" id="perim">–</span></div>
+      <div>Floor Area: <span class="metric" id="area">–</span></div>
+      <div>Scale: <span class="metric" id="scaleText">1 cell = 100 mm</span></div>
     </div>
-
-    <p class="hint">Tip: click to place points; segments snap to horizontal/vertical and to the grid.</p>
-  </div>
+  </main>
 
   <script>
-    // =============== CONFIG & STATE ===============
+    // --- Canvas setup ---------------------------------------------------------
+    const canvas = new fabric.Canvas('c', {
+      selection: true,
+      backgroundColor: '#0a0f1f'
+    });
 
-    const canvasEl = document.getElementById('c');
-    const wrapper = document.getElementById('stageWrap');
-    const perimEl = document.getElementById('perim');
-    const areaEl  = document.getElementById('area');
-
-    function sanitizeNumber(n, fallback) {
-      const x = parseFloat(n);
-      return Number.isFinite(x) && x > 0 ? x : fallback;
-    }
-
-    let SCALE_MM_PER_PX = sanitizeNumber(document.getElementById('scaleMmPerPx').value, 10);
-    let GRID_MM         = sanitizeNumber(document.getElementById('gridMm').value, 100);
-    let GRID_PX         = GRID_MM / SCALE_MM_PER_PX;
-
-    const canvas = new fabric.Canvas('c', { selection: false, backgroundColor: '#fff' });
-
-    let drawing = false;
-    let points = [];          // [{x,y}] (px)
-    let tempLine = null;      // preview segment
-    let polyShape = null;     // final polygon
-
-    // =============== SIZING & GRID =================
-
-    function fitCanvas() {
-      const w = wrapper.clientWidth;
-      const h = wrapper.clientHeight;
-
-      // Set element + internal sizes
-      canvas.setDimensions({ width: w, height: h }, { cssOnly: false });
-
-      // Recalculate offsets used by getPointer()
-      canvas.calcOffset();
-
-      drawGrid();
-      canvas.renderAll();
-    }
-
+    // Grid state
+    let GRID = parseInt(document.getElementById('grid').value || '25', 10);
     function drawGrid() {
       const w = canvas.getWidth(), h = canvas.getHeight();
-
-      // Skip if GRID_PX invalid
-      const g = Number.isFinite(GRID_PX) && GRID_PX > 0 ? GRID_PX : 10;
-
-      const grid = new fabric.StaticCanvas(null, { width: w, height: h });
-      for (let x = 0; x <= w; x += g) {
-        grid.add(new fabric.Line([x, 0, x, h], { stroke: '#eef2f7', selectable:false, evented:false }));
+      const lines = [];
+      for (let i=0; i<w; i+=GRID) {
+        lines.push(new fabric.Line([i,0,i,h], { stroke:'#14213a', selectable:false, evented:false }));
       }
-      for (let y = 0; y <= h; y += g) {
-        grid.add(new fabric.Line([0, y, w, y], { stroke: '#eef2f7', selectable:false, evented:false }));
+      for (let j=0; j<h; j+=GRID) {
+        lines.push(new fabric.Line([0,j,w,j], { stroke:'#14213a', selectable:false, evented:false }));
       }
-      canvas.setBackgroundImage(grid.toDataURL(), () => {
-        canvas.renderAll();
-        canvas.calcOffset(); // keep pointer math aligned
+      const grp = new fabric.Group(lines, { selectable:false, evented:false, excludeFromExport:true });
+      grp.id = '__grid__';
+      canvas.add(grp);
+      canvas.sendToBack(grp);
+    }
+    function resetGrid() {
+      const objs = canvas.getObjects();
+      for (const o of objs) if (o.id === '__grid__') canvas.remove(o);
+      drawGrid();
+      canvas.renderAll();
+    }
+    drawGrid();
+
+    // --- Sidebar controls -----------------------------------------------------
+    const orientationEl = document.getElementById('orientation');
+    const lengthEl = document.getElementById('length');
+    const gridEl = document.getElementById('grid');
+    const applyGridBtn = document.getElementById('applyGrid');
+    const clearBtn = document.getElementById('clearAll');
+    const oriPill = document.getElementById('oriPill');
+    const lenPill = document.getElementById('lenPill');
+
+    orientationEl.addEventListener('change', ()=> oriPill.textContent = orientationEl.value);
+    lengthEl.addEventListener('input', ()=> lenPill.textContent = lengthEl.value);
+    applyGridBtn.addEventListener('click', ()=> {
+      GRID = parseInt(gridEl.value || '25', 10);
+      resetGrid();
+      updateScaleText();
+    });
+    clearBtn.addEventListener('click', ()=> {
+      canvas.getObjects().forEach(o => { if (o.id !== '__grid__') canvas.remove(o);});
+      polygon = null;
+      updateMetrics();
+    });
+
+    // --- Drag from sidebar → drop to canvas ----------------------------------
+    const tool = document.getElementById('draggableTool');
+    tool.addEventListener('dragstart', (e)=> {
+      e.dataTransfer.setData('text/plain', JSON.stringify({
+        type:'segment',
+        ori: orientationEl.value, // H / V
+        len: parseInt(lengthEl.value || '100', 10)
+      }));
+    });
+
+    const stageWrap = document.getElementById('stageWrap');
+    stageWrap.addEventListener('dragover', e => e.preventDefault());
+    stageWrap.addEventListener('drop', e => {
+      e.preventDefault();
+      const payload = JSON.parse(e.dataTransfer.getData('text/plain')||'{}');
+      if (payload.type !== 'segment') return;
+
+      // Place at drop point, snapped to grid
+      const rect = stageWrap.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      const sx = snap(x), sy = snap(y);
+      const len = payload.len;
+      const ori = payload.ori;
+
+      const dx = (ori === 'H') ? len : 0;
+      const dy = (ori === 'V') ? len : 0;
+
+      const line = new fabric.Line([sx, sy, sx+dx, sy+dy], {
+        stroke: '#22c55e',
+        strokeWidth: 3,
+        selectable: true,
+        hasControls: false
       });
+
+      // Ensure orth-only while moving ends
+      line.on('mousedblclick', () => tryExtendChainFrom(line));
+      canvas.add(line);
+      updateMetrics();
+    });
+
+    function snap(v) {
+      return Math.round(v / GRID) * GRID;
     }
 
-    window.addEventListener('resize', fitCanvas);
-    fitCanvas();
-    // Ensure offsets after initial paint
-    setTimeout(() => fitCanvas(), 0);
+    // --- Build polygon (close shape) -----------------------------------------
+    // Simple approach: connect all line endpoints in order they were added,
+    // then generate a polygon. In practice you’ll want adjacency checks.
+    let polygon = null;
+    document.getElementById('closeShape').addEventListener('click', () => {
+      const lines = canvas.getObjects().filter(o => o.type === 'line');
+      if (lines.length < 3) { alert('Add at least 3 segments.'); return; }
 
-    // =============== HELPERS =======================
-
-    function snapToGrid(pt) {
-      const g = Number.isFinite(GRID_PX) && GRID_PX > 0 ? GRID_PX : 10;
-      return {
-        x: Math.round(pt.x / g) * g,
-        y: Math.round(pt.y / g) * g
-      };
-    }
-
-    // Force orthogonal segment from last → choose nearer axis
-    function orthogonalFrom(last, raw) {
-      const dx = Math.abs(raw.x - last.x);
-      const dy = Math.abs(raw.y - last.y);
-      if (dx < dy) return { x: raw.x, y: last.y }; // horizontal
-      return { x: last.x, y: raw.y };              // vertical
-    }
-
-    function pxToMeters(px) {
-      return (px * SCALE_MM_PER_PX) / 1000.0;
-    }
-
-    function updateMeasurements() {
-      if (!Array.isArray(points) || points.length < 3) {
-        perimEl.textContent = "0.00";
-        areaEl.textContent  = "0.00";
-        return;
-      }
-      // Perimeter
-      let periPx = 0;
-      for (let i = 0; i < points.length; i++) {
-        const a = points[i], b = points[(i+1) % points.length];
-        periPx += Math.hypot(b.x - a.x, b.y - a.y);
-      }
-      const periM = pxToMeters(periPx);
-
-      // Area via shoelace
-      let sum = 0;
-      for (let i = 0; i < points.length; i++) {
-        const a = points[i], b = points[(i+1) % points.length];
-        sum += (a.x * b.y - b.x * a.y);
-      }
-      const areaPx2 = Math.abs(sum) / 2;
-      const areaM2 = areaPx2 * Math.pow(SCALE_MM_PER_PX/1000, 2);
-
-      perimEl.textContent = periM.toFixed(2);
-      areaEl.textContent  = areaM2.toFixed(2);
-    }
-
-    function redrawPolylinePreview() {
-      canvas.getObjects('polyline').forEach(o => canvas.remove(o));
-      if (points.length < 2) return;
-
-      const polyline = new fabric.Polyline(points.map(p => ({x:p.x,y:p.y})), {
-        stroke: '#111827', strokeWidth: 2, fill: null, selectable: false, evented: false
+      // Collect endpoints (snap all)
+      const pts = [];
+      lines.forEach(l => {
+        pts.push([snap(l.x1), snap(l.y1)]);
       });
-      canvas.add(polyline);
-      canvas.sendToBack(polyline);
-    }
+      // Close back to first
+      const polyPts = dedupeAndOrder(pts);
+      if (polyPts.length < 3) { alert('Could not form a polygon.'); return; }
 
-    function drawPolygonFinal() {
-      canvas.getObjects('polyline').forEach(o => canvas.remove(o));
-      if (tempLine) { canvas.remove(tempLine); tempLine = null; }
-
-      if (polyShape) canvas.remove(polyShape);
-      polyShape = new fabric.Polygon(points, {
-        fill: 'rgba(59,130,246,0.12)',
-        stroke: '#2563eb',
+      if (polygon) canvas.remove(polygon);
+      polygon = new fabric.Polygon(polyPts.map(([x,y])=>({x,y})), {
+        fill: 'rgba(34,197,94,0.12)',
+        stroke: '#22c55e',
         strokeWidth: 2,
-        objectCaching: false,
-        selectable: true
+        selectable: false,
+        evented: false
       });
-      canvas.add(polyShape);
-      canvas.setActiveObject(polyShape);
-      updateMeasurements();
-      canvas.renderAll();
+      canvas.add(polygon);
+      canvas.sendToBack(polygon);
+      updateMetrics(true);
+    });
+
+    function dedupeAndOrder(pts) {
+      // Snap & merge duplicates
+      const key = (p)=> p[0]+','+p[1];
+      const map = new Map();
+      pts.forEach(p => map.set(key(p), p));
+      const uniq = [...map.values()];
+      // Greedy nearest-neighbor ordering (OK for rectangles/orth polygons)
+      if (!uniq.length) return [];
+      const ordered = [uniq[0]];
+      const rest = uniq.slice(1);
+      while (rest.length) {
+        const last = ordered[ordered.length-1];
+        let best = 0, bestD = Infinity;
+        rest.forEach((p,i)=>{
+          const d = Math.abs(p[0]-last[0]) + Math.abs(p[1]-last[1]);
+          if (d < bestD) { bestD = d; best = i; }
+        });
+        ordered.push(rest.splice(best,1)[0]);
+      }
+      // Close it
+      return ordered;
     }
 
-    // =============== EVENTS ========================
+    function tryExtendChainFrom(line) {
+      // Optional UX sugar: double-click a line to duplicate its orientation and length next to it.
+      const len = Math.round(Math.hypot(line.x2 - line.x1, line.y2 - line.y1));
+      const isH = (Math.abs(line.y2 - line.y1) < 1);
+      const dx = isH ? len : 0;
+      const dy = isH ? 0 : len;
+      const nl = new fabric.Line([line.x2, line.y2, line.x2+dx, line.y2+dy], {
+        stroke: '#22c55e', strokeWidth: 3, selectable:true, hasControls:false
+      });
+      canvas.add(nl);
+      updateMetrics();
+    }
 
-    // Start placing points
-    canvas.on('mouse:down', (opt) => {
-      if (!drawing) return;
-      // Use robust pointer (ignoreZoom=true)
-      const raw = canvas.getPointer(opt.e, true);
-      const snapped = snapToGrid(raw);
+    // --- Metrics (perimeter & area) ------------------------------------------
+    function updateMetrics(fromPolygon=false) {
+      // Perimeter from visible polygon if present; else sum line lengths.
+      const lines = canvas.getObjects().filter(o=>o.type==='line');
+      const segCount = lines.length;
+      document.getElementById('segCount').textContent = segCount;
 
-      if (points.length === 0) {
-        points.push(snapped);
-      } else {
-        const ortho = orthogonalFrom(points[points.length-1], snapped);
-        const finalPt = snapToGrid(ortho);
-        points.push(finalPt);
-      }
-      redrawPolylinePreview();
-      updateMeasurements();
-    });
-
-    // Live preview segment
-    canvas.on('mouse:move', (opt) => {
-      if (!drawing || points.length === 0) return;
-
-      const last = points[points.length-1];
-      const raw = canvas.getPointer(opt.e, true);
-      const snapped = snapToGrid(raw);
-      const ortho = orthogonalFrom(last, snapped);
-
-      if (!tempLine) {
-        tempLine = new fabric.Line([last.x, last.y, ortho.x, ortho.y], {
-          stroke: '#ef4444', strokeDashArray: [4,4], selectable:false, evented:false
-        });
-        canvas.add(tempLine);
-      } else {
-        tempLine.set({ x1: last.x, y1: last.y, x2: ortho.x, y2: ortho.y });
-      }
-      canvas.renderAll();
-    });
-
-    // =============== CONTROLS ======================
-
-    document.getElementById('start').onclick = () => {
-      points = [];
-      drawing = true;
-      if (polyShape) { canvas.remove(polyShape); polyShape = null; }
-      canvas.getObjects('polyline').forEach(o => canvas.remove(o));
-      if (tempLine) { canvas.remove(tempLine); tempLine = null; }
-      updateMeasurements();
-    };
-
-    document.getElementById('close').onclick = () => {
-      if (points.length >= 3) {
-        drawing = false;
-        // Close to first point with orthogonal leg if needed
-        const first = points[0], last = points[points.length-1];
-        if (first.x !== last.x && first.y !== last.y) {
-          points.push({ x:first.x, y:last.y });
+      let perimUnits = 0;
+      if (polygon) {
+        const pts = polygon.get('points');
+        for (let i=0;i<pts.length;i++){
+          const a = pts[i], b = pts[(i+1)%pts.length];
+          perimUnits += Math.hypot(b.x - a.x, b.y - a.y);
         }
-        drawPolygonFinal();
+      } else {
+        for (const l of lines) perimUnits += Math.hypot(l.x2 - l.x1, l.y2 - l.y1);
       }
-    };
 
-    document.getElementById('reset').onclick = () => {
-      drawing = false;
-      points = [];
-      canvas.clear();
-      drawGrid();
-      polyShape = null; tempLine = null;
-      updateMeasurements();
-    };
+      const areaUnits = polygon ? Math.abs(shoelace(polygon.get('points'))) : NaN;
 
-    document.getElementById('scaleMmPerPx').onchange = (e) => {
-      SCALE_MM_PER_PX = sanitizeNumber(e.target.value, 10);
-      GRID_PX = GRID_MM / SCALE_MM_PER_PX;
-      drawGrid();
-      updateMeasurements();
-    };
+      const unitName = document.getElementById('unitName').value || 'units';
+      const cellUnits = parseFloat(document.getElementById('unitPerCell').value || '100'); // real units per cell
+      const unitPerPx = cellUnits / GRID; // convert canvas px → real units
 
-    document.getElementById('gridMm').onchange = (e) => {
-      GRID_MM = sanitizeNumber(e.target.value, 100);
-      GRID_PX = GRID_MM / SCALE_MM_PER_PX;
-      drawGrid();
-    };
+      const perimReal = (perimUnits * unitPerPx).toFixed(2);
+      const areaReal  = polygon ? (areaUnits * unitPerPx * unitPerPx).toFixed(2) : '–';
 
-    // =============== SEND TO SHEETS =================
+      document.getElementById('perim').textContent = polygon ? `${perimReal} ${unitName}` : `${perimReal} ${unitName} (open)`;
+      document.getElementById('area').textContent  = polygon ? `${areaReal} ${unitName}²` : '–';
+    }
 
-    document.getElementById('send').onclick = async () => {
-      const url = document.getElementById('webhook').value.trim();
-      if (!url) { alert('Add your Apps Script Web App URL first.'); return; }
+    function shoelace(points) {
+      // points: [{x,y}, ...] in canvas px (grid-aligned)
+      let sum = 0;
+      for (let i=0;i<points.length;i++){
+        const a = points[i], b = points[(i+1)%points.length];
+        sum += (a.x * b.y) - (b.x * a.y);
+      }
+      return 0.5 * sum; // signed area in px²
+    }
 
-      const payload = {
-        perimeter_m: parseFloat(perimEl.textContent),
-        area_m2: parseFloat(areaEl.textContent),
-        scale_mm_per_px: SCALE_MM_PER_PX,
-        grid_mm: GRID_MM,
-        points_px: points
-      };
+    // --- Scale text
+    function updateScaleText(){
+      const unitName = document.getElementById('unitName').value || 'units';
+      const cellUnits = parseFloat(document.getElementById('unitPerCell').value || '100');
+      document.getElementById('scaleText').textContent = `1 cell = ${cellUnits} ${unitName}`;
+    }
+    document.getElementById('unitName').addEventListener('input', updateScaleText);
+    document.getElementById('unitPerCell').addEventListener('input', ()=>{ updateScaleText(); updateMetrics(); });
+    updateScaleText();
 
+    // --- Export / Sheets hookup ----------------------------------------------
+    document.getElementById('exportJSON').addEventListener('click', ()=>{
+      const payload = collectPayload();
+      const blob = new Blob([JSON.stringify(payload,null,2)], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'plan.json'; a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    document.getElementById('sendSheets').addEventListener('click', async ()=>{
+      const payload = collectPayload();
+      // TODO: Replace with your Apps Script Web App URL
+      const endpoint = 'https://script.google.com/macros/s/REPLACE_WITH_YOUR_DEPLOYMENT_ID/exec';
       try {
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: {'Content-Type':'application/json'},
+        const res = await fetch(endpoint, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
           body: JSON.stringify(payload)
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const text = await res.text();
-        alert('Sent to Google Sheet!\n\n' + text);
-      } catch (err) {
-        alert('Failed to send: ' + err.message);
+        if (!res.ok) throw new Error('HTTP '+res.status);
+        alert('Sent to Google Sheets ✅');
+      } catch (e) {
+        alert('Sending failed. Set your Apps Script URL.\n'+e.message);
       }
-    };
+    });
+
+    function collectPayload(){
+      const unitName = document.getElementById('unitName').value || 'units';
+      const cellUnits = parseFloat(document.getElementById('unitPerCell').value || '100');
+      const unitPerPx = cellUnits / GRID;
+      const lines = canvas.getObjects().filter(o=>o.type==='line').map(l=>({
+        x1:l.x1, y1:l.y1, x2:l.x2, y2:l.y2
+      }));
+      const poly = polygon ? polygon.get('points').map(p=>({x:p.x, y:p.y})) : null;
+
+      // Metrics in real units
+      let perimeter = 0, area = null;
+      if (poly){
+        for (let i=0;i<poly.length;i++){
+          const a = poly[i], b = poly[(i+1)%poly.length];
+          perimeter += Math.hypot(b.x-a.x, b.y-a.y);
+        }
+        area = Math.abs(shoelace(poly));
+      }
+      const payload = {
+        scale: { gridPx: GRID, unitsPerCell: cellUnits, unitName },
+        lines,
+        polygon: poly,
+        metrics: {
+          perimeter_real: poly ? perimeter * unitPerPx : null,
+          area_real: poly ? area * unitPerPx * unitPerPx : null,
+          unit: unitName
+        },
+        timestamp: new Date().toISOString()
+      };
+      return payload;
+    }
+
+    // Keep lines locked orthogonally & snapped when moved
+    canvas.on('object:moving', (e) => {
+      const o = e.target;
+      if (o.type === 'line') {
+        // Rebuild line around snapped start; keep orientation
+        const isH = Math.abs(o.y2 - o.y1) < Math.abs(o.x2 - o.x1);
+        const len = Math.round(Math.hypot(o.x2 - o.x1, o.y2 - o.y1));
+        const nx1 = snap(o.left), ny1 = snap(o.top);
+        o.set({ x1:nx1, y1:ny1, x2:nx1 + (isH ? len : 0), y2:ny1 + (isH ? 0 : len) });
+      }
+    });
   </script>
 </body>
 </html>
