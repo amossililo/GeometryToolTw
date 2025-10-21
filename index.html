@@ -102,7 +102,7 @@
     // --- Canvas setup ---------------------------------------------------------
     const canvas = new fabric.Canvas('c', {
       selection: true,
-      backgroundColor: '#0a0f1f'
+      backgroundColor: '#0e152a'
     });
 
     // Grid state
@@ -111,10 +111,10 @@
       const w = canvas.getWidth(), h = canvas.getHeight();
       const lines = [];
       for (let i=0; i<w; i+=GRID) {
-        lines.push(new fabric.Line([i,0,i,h], { stroke:'#14213a', selectable:false, evented:false }));
+       lines.push(new fabric.Line([i,0,i,h], { stroke:'#1e293b', selectable:false, evented:false }));
       }
       for (let j=0; j<h; j+=GRID) {
-        lines.push(new fabric.Line([0,j,w,j], { stroke:'#14213a', selectable:false, evented:false }));
+        lines.push(new fabric.Line([0,j,w,j], { stroke:'#1e293b', selectable:false, evented:false }));
       }
       const grp = new fabric.Group(lines, { selectable:false, evented:false, excludeFromExport:true });
       grp.id = '__grid__';
@@ -181,7 +181,7 @@
       const dy = (ori === 'V') ? len : 0;
 
       const line = new fabric.Line([sx, sy, sx+dx, sy+dy], {
-        stroke: '#22c55e',
+        stroke: '#4ade80',
         strokeWidth: 3,
         selectable: true,
         hasControls: false
