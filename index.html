@@ -16,6 +16,7 @@
       --grid-bold: #9ca3af;
       --wall: #111827;
       --wall-active: #2563eb;
+      --wall-open: #dc2626;
     }
 
     * {
@@ -94,7 +95,7 @@
 
     .button-row {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
       gap: 10px;
     }
 
@@ -210,8 +211,9 @@
         <li>Click or tap on the grid to choose a starting point.</li>
         <li>Drag horizontally or vertically to set the wall length.</li>
         <li>Release to place the wall. Repeat to build your plan.</li>
+        <li>Click any wall to select it, then choose <strong>Erase selected</strong> to remove it.</li>
       </ol>
-      <p style="margin:0; color: var(--ink-soft);">Need to tweak something? Use <strong>Undo</strong> to remove the last wall or <strong>Clear</strong> to start fresh.</p>
+      <p style="margin:0; color: var(--ink-soft);">Need to tweak something? Use <strong>Undo</strong> to remove the last wall, <strong>Erase selected</strong> to delete a picked wall, or <strong>Clear</strong> to start fresh.</p>
     </div>
 
     <div class="card" aria-label="Options">
@@ -230,6 +232,7 @@
 
       <div class="button-row">
         <button id="undoButton" class="secondary" type="button">Undo</button>
+        <button id="eraseButton" class="secondary" type="button" disabled>Erase selected</button>
         <button id="clearButton" class="secondary" type="button">Clear</button>
       </div>
       <button id="downloadButton" type="button">Download PNG</button>
@@ -276,18 +279,28 @@
     const wallCountEl = document.getElementById('wallCount');
     const totalLengthEl = document.getElementById('totalLength');
     const lastWallEl = document.getElementById('lastWall');
+    const eraseButton = document.getElementById('eraseButton');
 
     const state = {
       gridSize: 40,
       walls: [],
-      startCell: null,
       isDrawing: false,
       preview: null,
       unitLabel: 'cm',
       unitPerCell: 50,
+      selectedWallIndex: null,
+      openWallIndexes: new Set(),
+      openEndpoints: [],
     };
 
     const dpr = window.devicePixelRatio || 1;
+
+    const pointerSession = {
+      active: false,
+      pointerId: null,
+      startCell: null,
+      moved: false,
+    };
 
     function resizeCanvas() {
       const rect = canvas.parentElement.getBoundingClientRect();
@@ -304,7 +317,8 @@
       gridBold: '#9ca3af',
       wall: '#111827',
       wallActive: '#2563eb',
-      wallText: 'rgba(17,24,39,0.85)'
+      wallOpen: '#dc2626',
+      wallText: 'rgba(17,24,39,0.85)',
     };
 
     function drawGrid() {
@@ -356,6 +370,14 @@
       };
     }
 
+    function pointFromEvent(evt) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: evt.clientX - rect.left,
+        y: evt.clientY - rect.top,
+      };
+    }
+
     function wallToPixels(wall) {
       return {
         x1: wall.x1 * state.gridSize,
@@ -365,37 +387,77 @@
       };
     }
 
+    function findWallIndexNearPoint(point, tolerance = 10) {
+      for (let i = state.walls.length - 1; i >= 0; i -= 1) {
+        const px = wallToPixels(state.walls[i]);
+        const minX = Math.min(px.x1, px.x2) - tolerance;
+        const maxX = Math.max(px.x1, px.x2) + tolerance;
+        const minY = Math.min(px.y1, px.y2) - tolerance;
+        const maxY = Math.max(px.y1, px.y2) + tolerance;
+        if (point.x < minX || point.x > maxX || point.y < minY || point.y > maxY) continue;
+
+        if (px.y1 === px.y2) {
+          if (Math.abs(point.y - px.y1) <= tolerance) {
+            return i;
+          }
+        } else if (px.x1 === px.x2) {
+          if (Math.abs(point.x - px.x1) <= tolerance) {
+            return i;
+          }
+        }
+      }
+      return null;
+    }
+
+    function selectWallAtPoint(point) {
+      const index = findWallIndexNearPoint(point);
+      state.selectedWallIndex = index;
+      updateEraseButton();
+      return index !== null;
+    }
+
     function drawWalls() {
       ctx.save();
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
-      ctx.lineWidth = 6;
-      ctx.strokeStyle = colors.wall;
 
-      for (const wall of state.walls) {
+      state.walls.forEach((wall, index) => {
         const px = wallToPixels(wall);
+        const isOpen = state.openWallIndexes.has(index);
+        const isSelected = index === state.selectedWallIndex;
+
+        ctx.strokeStyle = isOpen ? colors.wallOpen : isSelected ? colors.wallActive : colors.wall;
+        ctx.lineWidth = isSelected ? 8 : 6;
         ctx.beginPath();
         ctx.moveTo(px.x1, px.y1);
         ctx.lineTo(px.x2, px.y2);
         ctx.stroke();
-        drawMeasurement(px);
-      }
+
+        const measurementColor = isOpen ? colors.wallOpen : isSelected ? colors.wallActive : undefined;
+        drawMeasurement(px, { color: measurementColor });
+      });
 
       if (state.preview) {
         const px = wallToPixels(state.preview);
+        ctx.save();
         ctx.strokeStyle = colors.wallActive;
+        ctx.lineWidth = 6;
         ctx.setLineDash([12, 8]);
         ctx.beginPath();
         ctx.moveTo(px.x1, px.y1);
         ctx.lineTo(px.x2, px.y2);
         ctx.stroke();
         ctx.setLineDash([]);
-        drawMeasurement(px, true);
+        drawMeasurement(px, { isPreview: true });
+        ctx.restore();
       }
+
       ctx.restore();
+      drawOpenEndpoints();
     }
 
-    function drawMeasurement(pxWall, isPreview = false) {
+    function drawMeasurement(pxWall, options = {}) {
+      const { isPreview = false, color } = options;
       const dx = pxWall.x2 - pxWall.x1;
       const dy = pxWall.y2 - pxWall.y1;
       const lengthCells = Math.round((Math.abs(dx) + Math.abs(dy)) / state.gridSize);
@@ -407,12 +469,33 @@
       const cy = (pxWall.y1 + pxWall.y2) / 2;
 
       ctx.save();
-      ctx.fillStyle = isPreview ? colors.wallActive : colors.wallText;
+      ctx.fillStyle = color || (isPreview ? colors.wallActive : colors.wallText);
       ctx.font = '600 14px "Inter", sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       const label = `${lengthReal} ${state.unitLabel}`;
       ctx.fillText(label, cx, cy - 12);
+      ctx.restore();
+    }
+
+    function drawOpenEndpoints() {
+      if (!state.openEndpoints.length) return;
+      ctx.save();
+      ctx.fillStyle = colors.wallOpen;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+
+      for (const point of state.openEndpoints) {
+        const px = {
+          x: point.x * state.gridSize,
+          y: point.y * state.gridSize,
+        };
+        ctx.beginPath();
+        ctx.arc(px.x, px.y, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+
       ctx.restore();
     }
 
@@ -441,36 +524,101 @@
       }
     }
 
-    function beginDrawing(evt) {
+    function computeConnectivity() {
+      if (state.walls.length === 0) {
+        state.openWallIndexes = new Set();
+        state.openEndpoints = [];
+        return;
+      }
+
+      const endpointMap = new Map();
+      state.walls.forEach((wall, index) => {
+        const startKey = `${wall.x1},${wall.y1}`;
+        const endKey = `${wall.x2},${wall.y2}`;
+
+        if (!endpointMap.has(startKey)) endpointMap.set(startKey, []);
+        endpointMap.get(startKey).push({ index, point: { x: wall.x1, y: wall.y1 } });
+
+        if (!endpointMap.has(endKey)) endpointMap.set(endKey, []);
+        endpointMap.get(endKey).push({ index, point: { x: wall.x2, y: wall.y2 } });
+      });
+
+      const openSet = new Set();
+      const openPoints = [];
+
+      endpointMap.forEach((entries) => {
+        if (entries.length <= 1) {
+          entries.forEach((entry) => {
+            openSet.add(entry.index);
+            openPoints.push(entry.point);
+          });
+        }
+      });
+
+      state.openWallIndexes = openSet;
+      state.openEndpoints = openPoints;
+    }
+
+    function updateEraseButton() {
+      eraseButton.disabled = state.selectedWallIndex == null;
+    }
+
+    function eraseSelected() {
+      if (state.selectedWallIndex == null) return;
+      state.walls.splice(state.selectedWallIndex, 1);
+      state.selectedWallIndex = null;
+      computeConnectivity();
+      updateEraseButton();
+      updateMetrics();
+      draw();
+    }
+
+    function handlePointerDown(evt) {
       evt.preventDefault();
+      if (pointerSession.active) return;
       const cell = cellFromEvent(evt);
-      state.startCell = cell;
-      state.isDrawing = true;
+      pointerSession.active = true;
+      pointerSession.pointerId = evt.pointerId;
+      pointerSession.startCell = cell;
+      pointerSession.moved = false;
+      state.isDrawing = false;
       state.preview = null;
+
       if (typeof canvas.setPointerCapture === 'function') {
         canvas.setPointerCapture(evt.pointerId);
       }
     }
 
-    function updatePreview(evt) {
-      if (!state.isDrawing || !state.startCell) return;
+    function handlePointerMove(evt) {
+      if (!pointerSession.active || evt.pointerId !== pointerSession.pointerId) return;
+      evt.preventDefault();
       const currentCell = cellFromEvent(evt);
-      const dx = currentCell.col - state.startCell.col;
-      const dy = currentCell.row - state.startCell.row;
+      const dx = currentCell.col - pointerSession.startCell.col;
+      const dy = currentCell.row - pointerSession.startCell.row;
 
-      let endCell = { ...state.startCell };
+      if (!state.isDrawing) {
+        if (dx === 0 && dy === 0) {
+          draw();
+          return;
+        }
+        state.isDrawing = true;
+      }
+
+      pointerSession.moved = true;
+
+      let endCell = { ...pointerSession.startCell };
       if (Math.abs(dx) >= Math.abs(dy)) {
         endCell.col += dx;
       } else {
         endCell.row += dy;
       }
 
-      if (endCell.col === state.startCell.col && endCell.row === state.startCell.row) {
+      if (endCell.col === pointerSession.startCell.col && endCell.row === pointerSession.startCell.row) {
         state.preview = null;
       } else {
         state.preview = {
-          x1: state.startCell.col,
-          y1: state.startCell.row,
+          x1: pointerSession.startCell.col,
+          y1: pointerSession.startCell.row,
           x2: endCell.col,
           y2: endCell.row,
         };
@@ -478,50 +626,86 @@
       draw();
     }
 
-    function finishDrawing(evt) {
-      if (!state.isDrawing) return;
-      updatePreview(evt);
-      if (state.preview) {
+    function handlePointerUp(evt) {
+      if (!pointerSession.active || evt.pointerId !== pointerSession.pointerId) return;
+      evt.preventDefault();
+
+      if (state.isDrawing && state.preview) {
         state.walls.push(state.preview);
         state.preview = null;
+        state.selectedWallIndex = null;
+        computeConnectivity();
+        updateEraseButton();
         updateMetrics();
+        draw();
+      } else if (!state.isDrawing && !pointerSession.moved) {
+        const point = pointFromEvent(evt);
+        selectWallAtPoint(point);
+        draw();
+      } else if (state.isDrawing && !state.preview) {
+        draw();
       }
-      state.isDrawing = false;
-      state.startCell = null;
-      draw();
+
+      releasePointer(evt.pointerId);
+      resetPointerSession();
+    }
+
+    function handlePointerCancel(evt) {
+      if (!pointerSession.active || (evt.pointerId != null && evt.pointerId !== pointerSession.pointerId)) {
+        return;
+      }
+
+      if (state.isDrawing) {
+        state.preview = null;
+        draw();
+      }
+
+      if (evt.pointerId != null) {
+        releasePointer(evt.pointerId);
+      } else if (pointerSession.pointerId != null) {
+        releasePointer(pointerSession.pointerId);
+      }
+
+      resetPointerSession();
+    }
+
+    function releasePointer(id) {
       if (
-        evt &&
-        evt.pointerId != null &&
         typeof canvas.hasPointerCapture === 'function' &&
-        canvas.hasPointerCapture(evt.pointerId)
+        id != null &&
+        canvas.hasPointerCapture(id)
       ) {
-        canvas.releasePointerCapture(evt.pointerId);
+        canvas.releasePointerCapture(id);
       }
     }
 
-    function cancelDrawing(evt) {
+    function resetPointerSession() {
+      pointerSession.active = false;
+      pointerSession.pointerId = null;
+      pointerSession.startCell = null;
+      pointerSession.moved = false;
       state.isDrawing = false;
-      state.startCell = null;
       state.preview = null;
-      draw();
-      if (
-        evt &&
-        evt.pointerId != null &&
-        typeof canvas.hasPointerCapture === 'function' &&
-        canvas.hasPointerCapture(evt.pointerId)
-      ) {
-        canvas.releasePointerCapture(evt.pointerId);
-      }
     }
 
     function undoLast() {
+      if (state.walls.length === 0) return;
       state.walls.pop();
+      if (state.selectedWallIndex != null && state.selectedWallIndex >= state.walls.length) {
+        state.selectedWallIndex = null;
+      }
+      computeConnectivity();
+      updateEraseButton();
       updateMetrics();
       draw();
     }
 
     function clearAll() {
+      if (state.walls.length === 0) return;
       state.walls = [];
+      state.selectedWallIndex = null;
+      computeConnectivity();
+      updateEraseButton();
       updateMetrics();
       draw();
     }
@@ -533,11 +717,11 @@
       link.click();
     }
 
-    canvas.addEventListener('pointerdown', beginDrawing);
-    canvas.addEventListener('pointermove', updatePreview);
-    canvas.addEventListener('pointerup', finishDrawing);
-    canvas.addEventListener('pointercancel', cancelDrawing);
-    canvas.addEventListener('pointerleave', cancelDrawing);
+    canvas.addEventListener('pointerdown', handlePointerDown);
+    canvas.addEventListener('pointermove', handlePointerMove);
+    canvas.addEventListener('pointerup', handlePointerUp);
+    canvas.addEventListener('pointercancel', handlePointerCancel);
+    canvas.addEventListener('pointerleave', handlePointerCancel);
 
     document.getElementById('gridSize').addEventListener('input', (evt) => {
       const value = Number(evt.target.value);
@@ -570,12 +754,16 @@
       clearAll();
     });
 
+    eraseButton.addEventListener('click', eraseSelected);
+
     document.getElementById('downloadButton').addEventListener('click', downloadPNG);
 
     window.addEventListener('resize', resizeCanvas);
 
     resizeCanvas();
     updateMetrics();
+    computeConnectivity();
+    updateEraseButton();
   </script>
 </body>
 </html>
