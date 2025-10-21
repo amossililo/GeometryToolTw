@@ -1,389 +1,581 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Orthogonal Plan Sketcher (MVP)</title>
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- Fabric.js CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/fabric@5.3.0/dist/fabric.min.js"></script>
+  <title>House Plan Sketcher</title>
   <style>
-    :root { --panel: #0f172a; --ink:#e2e8f0; --ink2:#94a3b8; --accent:#22c55e; }
-    * { box-sizing: border-box; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial; }
-    body { margin: 0; display: grid; grid-template-columns: 320px 1fr; height: 100svh; color: var(--ink); background: #0b1020; }
-    aside { background: linear-gradient(180deg, #0f172a, #0b1020); border-right: 1px solid #1e293b; padding: 16px; display: grid; grid-template-rows: auto 1fr auto; gap: 16px; }
-    h1 { margin: 0; font-size: 18px; letter-spacing:.3px; }
-    .card { border: 1px solid #1f2937; border-radius: 14px; padding: 12px; background: #0c1326; }
-    label { font-size: 12px; color: var(--ink2); display: block; margin-bottom: 6px; }
-    input, select, button { width: 100%; padding: 10px 12px; border-radius: 12px; border: 1px solid #28344a; background: #0b152e; color: var(--ink); outline: none; }
-    input:focus, select:focus { border-color: #33507b; }
-    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .pill { display: inline-flex; gap:8px; align-items:center; padding: 6px 10px; border-radius: 999px; border:1px solid #2b3750; background:#0a1326; font-size:12px; }
-    .tool { display:flex; align-items:center; gap:8px; padding:10px; border:1px dashed #334155; border-radius:12px; cursor:grab; user-select:none; margin-top:8px; }
-    .tool:active { cursor:grabbing; }
-    .muted { color: var(--ink2); font-size: 12px; }
-    main { position: relative; display:grid; grid-template-rows:auto 1fr auto; }
-    .toolbar { display:flex; gap:8px; padding:10px; border-bottom:1px solid #1f2937; background:#0c1326; }
-    .toolbar button { width:auto; }
-    .status { padding:10px; display:flex; gap:16px; border-top:1px solid #1f2937; background:#0c1326; font-size:13px; color:var(--ink2); }
-    #stageWrap { position: relative; }
-    canvas { display:block; background:#0a0f1f; }
-    .metric { color:#cbd5e1; }
-    .ok { background: linear-gradient(90deg, #065f46, #14532d); border-color:#064e3b; }
+    :root {
+      color-scheme: light;
+      --bg: #f3f4f6;
+      --panel: #ffffff;
+      --accent: #2563eb;
+      --ink: #111827;
+      --ink-soft: #4b5563;
+      --grid: #d1d5db;
+      --grid-bold: #9ca3af;
+      --wall: #111827;
+      --wall-active: #2563eb;
+    }
+
+    * {
+      box-sizing: border-box;
+      font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      display: grid;
+      grid-template-columns: minmax(260px, 320px) 1fr;
+    }
+
+    aside {
+      background: var(--panel);
+      padding: 24px;
+      border-right: 1px solid #e5e7eb;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 24px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 1.5rem;
+      color: var(--ink);
+    }
+
+    p,
+    label,
+    button,
+    input {
+      color: var(--ink-soft);
+      font-size: 0.95rem;
+    }
+
+    .card {
+      border: 1px solid #e5e7eb;
+      border-radius: 16px;
+      padding: 16px;
+      background: #f9fafb;
+      display: grid;
+      gap: 12px;
+    }
+
+    .card strong {
+      color: var(--ink);
+    }
+
+    .card label {
+      font-weight: 600;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    input[type="number"],
+    input[type="text"] {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid #d1d5db;
+      background: #fff;
+      color: var(--ink);
+    }
+
+    input:focus {
+      border-color: var(--accent);
+      outline: 2px solid color-mix(in srgb, var(--accent) 30%, transparent);
+      outline-offset: 2px;
+    }
+
+    .button-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    button {
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: none;
+      background: var(--accent);
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    button.secondary {
+      background: #e5e7eb;
+      color: var(--ink);
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba(37, 99, 235, 0.18);
+    }
+
+    main {
+      position: relative;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+    }
+
+    .top-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding: 16px 24px;
+      background: rgba(255, 255, 255, 0.85);
+      border-bottom: 1px solid #e5e7eb;
+      backdrop-filter: blur(12px);
+      font-size: 0.9rem;
+      color: var(--ink-soft);
+    }
+
+    .canvas-wrapper {
+      position: relative;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: none;
+      cursor: crosshair;
+    }
+
+    .footer {
+      padding: 16px 24px;
+      background: rgba(255, 255, 255, 0.85);
+      border-top: 1px solid #e5e7eb;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      justify-content: space-between;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+    }
+
+    .metric {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 0.85rem;
+      color: var(--ink-soft);
+    }
+
+    .metric span {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--ink);
+    }
+
+    @media (max-width: 880px) {
+      body {
+        grid-template-columns: 1fr;
+      }
+
+      aside {
+        border-right: none;
+        border-bottom: 1px solid #e5e7eb;
+      }
+
+      main {
+        min-height: 60vh;
+      }
+    }
   </style>
 </head>
 <body>
   <aside>
-    <div>
-      <h1>Plan Builder</h1>
-      <p class="muted">Drag a line from here → drop it on the canvas. Grid is in <b>units</b> (you choose scale).</p>
+    <header>
+      <h1>House Plan Sketcher</h1>
+      <p>Create clean 2D floor plans with simple drag lines. Everything snaps to the grid and stays perfectly horizontal or vertical.</p>
+    </header>
+
+    <div class="card" aria-label="Drawing instructions">
+      <strong>How to draw</strong>
+      <ol style="margin:0; padding-left: 1.1rem; display:grid; gap:6px; color: var(--ink-soft);">
+        <li>Click or tap on the grid to choose a starting point.</li>
+        <li>Drag horizontally or vertically to set the wall length.</li>
+        <li>Release to place the wall. Repeat to build your plan.</li>
+      </ol>
+      <p style="margin:0; color: var(--ink-soft);">Need to tweak something? Use <strong>Undo</strong> to remove the last wall or <strong>Clear</strong> to start fresh.</p>
     </div>
 
-    <div class="card">
-      <div class="row">
-        <div>
-          <label>Orientation</label>
-          <select id="orientation">
-            <option value="H">Horizontal</option>
-            <option value="V">Vertical</option>
-          </select>
-        </div>
-        <div>
-          <label>Length (units)</label>
-          <input id="length" type="number" min="1" step="1" value="300" />
-        </div>
-      </div>
+    <div class="card" aria-label="Options">
+      <label>Grid spacing
+        <input id="gridSize" type="number" min="10" step="5" value="40" aria-describedby="gridHelp" />
+      </label>
+      <span id="gridHelp" style="font-size:0.85rem; color:var(--ink-soft);">Pixels between grid lines. Larger numbers = bigger rooms.</span>
 
-      <div id="draggableTool" class="tool" draggable="true" title="Drag me to the canvas">
-        ➕ Add Segment
-        <span class="pill"><span id="oriPill">H</span> • <span id="lenPill">300</span>u</span>
-      </div>
+      <label>Real-world scale
+        <input id="unitLabel" type="text" value="cm" aria-describedby="scaleHelp" />
+      </label>
+      <label>Units per grid square
+        <input id="unitPerCell" type="number" min="1" step="1" value="50" />
+      </label>
+      <span id="scaleHelp" style="font-size:0.85rem; color:var(--ink-soft);">Example: 1 square = 50 cm.</span>
 
-      <div style="margin-top:12px">
-        <label>Grid size (units per cell)</label>
-        <input id="grid" type="number" min="1" step="1" value="25" />
+      <div class="button-row">
+        <button id="undoButton" class="secondary" type="button">Undo</button>
+        <button id="clearButton" class="secondary" type="button">Clear</button>
       </div>
-      <div class="row" style="margin-top:8px">
-        <button id="applyGrid">Apply Grid</button>
-        <button id="clearAll">Clear</button>
-      </div>
+      <button id="downloadButton" type="button">Download PNG</button>
     </div>
 
-    <div class="card">
-      <label>Scale (display only)</label>
-      <div class="row">
-        <input id="unitName" placeholder="e.g., mm, cm, m" value="mm" />
-        <input id="unitPerCell" type="number" min="1" step="1" value="100" title="How many real units per grid cell?" />
-      </div>
-      <p class="muted" style="margin-top:8px">E.g., if 1 cell = 100 mm, a 300-unit line is 3 cells = 300 mm.</p>
-      <button id="closeShape" class="ok">Close Shape & Compute</button>
-      <button id="exportJSON" style="margin-top:8px">Export JSON</button>
-      <button id="sendSheets" style="margin-top:8px">Send to Google Sheets</button>
-    </div>
+    <footer style="align-self:end; font-size:0.85rem; color:var(--ink-soft); line-height:1.4;">
+      <strong style="display:block; color:var(--ink);">Tip</strong>
+      Draw walls in the order you would walk around the building. This makes it easier to see the total length and check that the shape closes neatly.
+    </footer>
   </aside>
 
   <main>
-    <div class="toolbar">
-      <span class="pill">Snap-to-grid</span>
-      <span class="pill">Orthogonal only</span>
-      <span class="pill">Drag from sidebar → drop to place</span>
+    <div class="top-bar">
+      <span>Click and drag inside the grid to place walls.</span>
+      <span>Walls snap to the nearest square for crisp 90° corners.</span>
     </div>
-    <div id="stageWrap">
-      <canvas id="c" width="1400" height="900"></canvas>
+    <div class="canvas-wrapper">
+      <canvas id="planCanvas" aria-label="Plan canvas"></canvas>
     </div>
-    <div class="status">
-      <div>Segments: <span class="metric" id="segCount">0</span></div>
-      <div>External Perimeter: <span class="metric" id="perim">–</span></div>
-      <div>Floor Area: <span class="metric" id="area">–</span></div>
-      <div>Scale: <span class="metric" id="scaleText">1 cell = 100 mm</span></div>
+    <div class="footer">
+      <div class="metrics">
+        <div class="metric">
+          Walls drawn
+          <span id="wallCount">0</span>
+        </div>
+        <div class="metric">
+          Total length
+          <span id="totalLength">0</span>
+        </div>
+        <div class="metric">
+          Last wall
+          <span id="lastWall">–</span>
+        </div>
+      </div>
+      <div style="font-size:0.85rem; color:var(--ink-soft);">
+        Measurements update automatically as you draw.
+      </div>
     </div>
   </main>
 
   <script>
-    // --- Canvas setup ---------------------------------------------------------
-    const canvas = new fabric.Canvas('c', {
-      selection: true,
-      backgroundColor: '#0e152a'
-    });
+    const canvas = document.getElementById('planCanvas');
+    const ctx = canvas.getContext('2d');
+    const wallCountEl = document.getElementById('wallCount');
+    const totalLengthEl = document.getElementById('totalLength');
+    const lastWallEl = document.getElementById('lastWall');
 
-    // Grid state
-    let GRID = parseInt(document.getElementById('grid').value || '25', 10);
+    const state = {
+      gridSize: 40,
+      walls: [],
+      startCell: null,
+      isDrawing: false,
+      preview: null,
+      unitLabel: 'cm',
+      unitPerCell: 50,
+    };
+
+    const dpr = window.devicePixelRatio || 1;
+
+    function resizeCanvas() {
+      const rect = canvas.parentElement.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      canvas.style.width = rect.width + 'px';
+      canvas.style.height = rect.height + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      draw();
+    }
+
+    const colors = {
+      grid: '#d1d5db',
+      gridBold: '#9ca3af',
+      wall: '#111827',
+      wallActive: '#2563eb',
+      wallText: 'rgba(17,24,39,0.85)'
+    };
+
     function drawGrid() {
-      const w = canvas.getWidth(), h = canvas.getHeight();
-      const lines = [];
-      for (let i=0; i<w; i+=GRID) {
-       lines.push(new fabric.Line([i,0,i,h], { stroke:'#1e293b', selectable:false, evented:false }));
+      const { gridSize } = state;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.save();
+      ctx.strokeStyle = colors.grid;
+      ctx.lineWidth = 1;
+
+      const width = canvas.width / dpr;
+      const height = canvas.height / dpr;
+
+      ctx.beginPath();
+      for (let x = 0; x <= width; x += gridSize) {
+        ctx.moveTo(x + 0.5, 0);
+        ctx.lineTo(x + 0.5, height);
       }
-      for (let j=0; j<h; j+=GRID) {
-        lines.push(new fabric.Line([0,j,w,j], { stroke:'#1e293b', selectable:false, evented:false }));
+      for (let y = 0; y <= height; y += gridSize) {
+        ctx.moveTo(0, y + 0.5);
+        ctx.lineTo(width, y + 0.5);
       }
-      const grp = new fabric.Group(lines, { selectable:false, evented:false, excludeFromExport:true });
-      grp.id = '__grid__';
-      canvas.add(grp);
-      canvas.sendToBack(grp);
-    }
-    function resetGrid() {
-      const objs = canvas.getObjects();
-      for (const o of objs) if (o.id === '__grid__') canvas.remove(o);
-      drawGrid();
-      canvas.renderAll();
-    }
-    drawGrid();
+      ctx.stroke();
 
-    // --- Sidebar controls -----------------------------------------------------
-    const orientationEl = document.getElementById('orientation');
-    const lengthEl = document.getElementById('length');
-    const gridEl = document.getElementById('grid');
-    const applyGridBtn = document.getElementById('applyGrid');
-    const clearBtn = document.getElementById('clearAll');
-    const oriPill = document.getElementById('oriPill');
-    const lenPill = document.getElementById('lenPill');
-
-    orientationEl.addEventListener('change', ()=> oriPill.textContent = orientationEl.value);
-    lengthEl.addEventListener('input', ()=> lenPill.textContent = lengthEl.value);
-    applyGridBtn.addEventListener('click', ()=> {
-      GRID = parseInt(gridEl.value || '25', 10);
-      resetGrid();
-      updateScaleText();
-    });
-    clearBtn.addEventListener('click', ()=> {
-      canvas.getObjects().forEach(o => { if (o.id !== '__grid__') canvas.remove(o);});
-      polygon = null;
-      updateMetrics();
-    });
-
-    // --- Drag from sidebar → drop to canvas ----------------------------------
-    const tool = document.getElementById('draggableTool');
-    tool.addEventListener('dragstart', (e)=> {
-      e.dataTransfer.setData('text/plain', JSON.stringify({
-        type:'segment',
-        ori: orientationEl.value, // H / V
-        len: parseInt(lengthEl.value || '100', 10)
-      }));
-    });
-
-    const stageWrap = document.getElementById('stageWrap');
-    stageWrap.addEventListener('dragover', e => e.preventDefault());
-    stageWrap.addEventListener('drop', e => {
-      e.preventDefault();
-      const payload = JSON.parse(e.dataTransfer.getData('text/plain')||'{}');
-      if (payload.type !== 'segment') return;
-
-      // Place at drop point, snapped to grid
-      const rect = stageWrap.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-
-      const sx = snap(x), sy = snap(y);
-      const len = payload.len;
-      const ori = payload.ori;
-
-      const dx = (ori === 'H') ? len : 0;
-      const dy = (ori === 'V') ? len : 0;
-
-      const line = new fabric.Line([sx, sy, sx+dx, sy+dy], {
-        stroke: '#4ade80',
-        strokeWidth: 3,
-        selectable: true,
-        hasControls: false
-      });
-
-      // Ensure orth-only while moving ends
-      line.on('mousedblclick', () => tryExtendChainFrom(line));
-      canvas.add(line);
-      updateMetrics();
-    });
-
-    function snap(v) {
-      return Math.round(v / GRID) * GRID;
-    }
-
-    // --- Build polygon (close shape) -----------------------------------------
-    // Simple approach: connect all line endpoints in order they were added,
-    // then generate a polygon. In practice you’ll want adjacency checks.
-    let polygon = null;
-    document.getElementById('closeShape').addEventListener('click', () => {
-      const lines = canvas.getObjects().filter(o => o.type === 'line');
-      if (lines.length < 3) { alert('Add at least 3 segments.'); return; }
-
-      // Collect endpoints (snap all)
-      const pts = [];
-      lines.forEach(l => {
-        pts.push([snap(l.x1), snap(l.y1)]);
-      });
-      // Close back to first
-      const polyPts = dedupeAndOrder(pts);
-      if (polyPts.length < 3) { alert('Could not form a polygon.'); return; }
-
-      if (polygon) canvas.remove(polygon);
-      polygon = new fabric.Polygon(polyPts.map(([x,y])=>({x,y})), {
-        fill: 'rgba(34,197,94,0.12)',
-        stroke: '#22c55e',
-        strokeWidth: 2,
-        selectable: false,
-        evented: false
-      });
-      canvas.add(polygon);
-      canvas.sendToBack(polygon);
-      updateMetrics(true);
-    });
-
-    function dedupeAndOrder(pts) {
-      // Snap & merge duplicates
-      const key = (p)=> p[0]+','+p[1];
-      const map = new Map();
-      pts.forEach(p => map.set(key(p), p));
-      const uniq = [...map.values()];
-      // Greedy nearest-neighbor ordering (OK for rectangles/orth polygons)
-      if (!uniq.length) return [];
-      const ordered = [uniq[0]];
-      const rest = uniq.slice(1);
-      while (rest.length) {
-        const last = ordered[ordered.length-1];
-        let best = 0, bestD = Infinity;
-        rest.forEach((p,i)=>{
-          const d = Math.abs(p[0]-last[0]) + Math.abs(p[1]-last[1]);
-          if (d < bestD) { bestD = d; best = i; }
-        });
-        ordered.push(rest.splice(best,1)[0]);
+      ctx.strokeStyle = colors.gridBold;
+      ctx.lineWidth = 1.25;
+      ctx.beginPath();
+      for (let x = 0; x <= width; x += gridSize * 5) {
+        ctx.moveTo(x + 0.5, 0);
+        ctx.lineTo(x + 0.5, height);
       }
-      // Close it
-      return ordered;
-    }
-
-    function tryExtendChainFrom(line) {
-      // Optional UX sugar: double-click a line to duplicate its orientation and length next to it.
-      const len = Math.round(Math.hypot(line.x2 - line.x1, line.y2 - line.y1));
-      const isH = (Math.abs(line.y2 - line.y1) < 1);
-      const dx = isH ? len : 0;
-      const dy = isH ? 0 : len;
-      const nl = new fabric.Line([line.x2, line.y2, line.x2+dx, line.y2+dy], {
-        stroke: '#22c55e', strokeWidth: 3, selectable:true, hasControls:false
-      });
-      canvas.add(nl);
-      updateMetrics();
-    }
-
-    // --- Metrics (perimeter & area) ------------------------------------------
-    function updateMetrics(fromPolygon=false) {
-      // Perimeter from visible polygon if present; else sum line lengths.
-      const lines = canvas.getObjects().filter(o=>o.type==='line');
-      const segCount = lines.length;
-      document.getElementById('segCount').textContent = segCount;
-
-      let perimUnits = 0;
-      if (polygon) {
-        const pts = polygon.get('points');
-        for (let i=0;i<pts.length;i++){
-          const a = pts[i], b = pts[(i+1)%pts.length];
-          perimUnits += Math.hypot(b.x - a.x, b.y - a.y);
-        }
-      } else {
-        for (const l of lines) perimUnits += Math.hypot(l.x2 - l.x1, l.y2 - l.y1);
+      for (let y = 0; y <= height; y += gridSize * 5) {
+        ctx.moveTo(0, y + 0.5);
+        ctx.lineTo(width, y + 0.5);
       }
-
-      const areaUnits = polygon ? Math.abs(shoelace(polygon.get('points'))) : NaN;
-
-      const unitName = document.getElementById('unitName').value || 'units';
-      const cellUnits = parseFloat(document.getElementById('unitPerCell').value || '100'); // real units per cell
-      const unitPerPx = cellUnits / GRID; // convert canvas px → real units
-
-      const perimReal = (perimUnits * unitPerPx).toFixed(2);
-      const areaReal  = polygon ? (areaUnits * unitPerPx * unitPerPx).toFixed(2) : '–';
-
-      document.getElementById('perim').textContent = polygon ? `${perimReal} ${unitName}` : `${perimReal} ${unitName} (open)`;
-      document.getElementById('area').textContent  = polygon ? `${areaReal} ${unitName}²` : '–';
+      ctx.stroke();
+      ctx.restore();
     }
 
-    function shoelace(points) {
-      // points: [{x,y}, ...] in canvas px (grid-aligned)
-      let sum = 0;
-      for (let i=0;i<points.length;i++){
-        const a = points[i], b = points[(i+1)%points.length];
-        sum += (a.x * b.y) - (b.x * a.y);
-      }
-      return 0.5 * sum; // signed area in px²
-    }
-
-    // --- Scale text
-    function updateScaleText(){
-      const unitName = document.getElementById('unitName').value || 'units';
-      const cellUnits = parseFloat(document.getElementById('unitPerCell').value || '100');
-      document.getElementById('scaleText').textContent = `1 cell = ${cellUnits} ${unitName}`;
-    }
-    document.getElementById('unitName').addEventListener('input', updateScaleText);
-    document.getElementById('unitPerCell').addEventListener('input', ()=>{ updateScaleText(); updateMetrics(); });
-    updateScaleText();
-
-    // --- Export / Sheets hookup ----------------------------------------------
-    document.getElementById('exportJSON').addEventListener('click', ()=>{
-      const payload = collectPayload();
-      const blob = new Blob([JSON.stringify(payload,null,2)], {type:'application/json'});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = 'plan.json'; a.click();
-      URL.revokeObjectURL(url);
-    });
-
-    document.getElementById('sendSheets').addEventListener('click', async ()=>{
-      const payload = collectPayload();
-      // TODO: Replace with your Apps Script Web App URL
-      const endpoint = 'https://script.google.com/macros/s/REPLACE_WITH_YOUR_DEPLOYMENT_ID/exec';
-      try {
-        const res = await fetch(endpoint, {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify(payload)
-        });
-        if (!res.ok) throw new Error('HTTP '+res.status);
-        alert('Sent to Google Sheets ✅');
-      } catch (e) {
-        alert('Sending failed. Set your Apps Script URL.\n'+e.message);
-      }
-    });
-
-    function collectPayload(){
-      const unitName = document.getElementById('unitName').value || 'units';
-      const cellUnits = parseFloat(document.getElementById('unitPerCell').value || '100');
-      const unitPerPx = cellUnits / GRID;
-      const lines = canvas.getObjects().filter(o=>o.type==='line').map(l=>({
-        x1:l.x1, y1:l.y1, x2:l.x2, y2:l.y2
-      }));
-      const poly = polygon ? polygon.get('points').map(p=>({x:p.x, y:p.y})) : null;
-
-      // Metrics in real units
-      let perimeter = 0, area = null;
-      if (poly){
-        for (let i=0;i<poly.length;i++){
-          const a = poly[i], b = poly[(i+1)%poly.length];
-          perimeter += Math.hypot(b.x-a.x, b.y-a.y);
-        }
-        area = Math.abs(shoelace(poly));
-      }
-      const payload = {
-        scale: { gridPx: GRID, unitsPerCell: cellUnits, unitName },
-        lines,
-        polygon: poly,
-        metrics: {
-          perimeter_real: poly ? perimeter * unitPerPx : null,
-          area_real: poly ? area * unitPerPx * unitPerPx : null,
-          unit: unitName
-        },
-        timestamp: new Date().toISOString()
+    function cellFromEvent(evt) {
+      const rect = canvas.getBoundingClientRect();
+      const x = evt.clientX - rect.left;
+      const y = evt.clientY - rect.top;
+      return {
+        col: Math.round(x / state.gridSize),
+        row: Math.round(y / state.gridSize),
       };
-      return payload;
     }
 
-    // Keep lines locked orthogonally & snapped when moved
-    canvas.on('object:moving', (e) => {
-      const o = e.target;
-      if (o.type === 'line') {
-        // Rebuild line around snapped start; keep orientation
-        const isH = Math.abs(o.y2 - o.y1) < Math.abs(o.x2 - o.x1);
-        const len = Math.round(Math.hypot(o.x2 - o.x1, o.y2 - o.y1));
-        const nx1 = snap(o.left), ny1 = snap(o.top);
-        o.set({ x1:nx1, y1:ny1, x2:nx1 + (isH ? len : 0), y2:ny1 + (isH ? 0 : len) });
+    function wallToPixels(wall) {
+      return {
+        x1: wall.x1 * state.gridSize,
+        y1: wall.y1 * state.gridSize,
+        x2: wall.x2 * state.gridSize,
+        y2: wall.y2 * state.gridSize,
+      };
+    }
+
+    function drawWalls() {
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = colors.wall;
+
+      for (const wall of state.walls) {
+        const px = wallToPixels(wall);
+        ctx.beginPath();
+        ctx.moveTo(px.x1, px.y1);
+        ctx.lineTo(px.x2, px.y2);
+        ctx.stroke();
+        drawMeasurement(px);
       }
+
+      if (state.preview) {
+        const px = wallToPixels(state.preview);
+        ctx.strokeStyle = colors.wallActive;
+        ctx.setLineDash([12, 8]);
+        ctx.beginPath();
+        ctx.moveTo(px.x1, px.y1);
+        ctx.lineTo(px.x2, px.y2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        drawMeasurement(px, true);
+      }
+      ctx.restore();
+    }
+
+    function drawMeasurement(pxWall, isPreview = false) {
+      const dx = pxWall.x2 - pxWall.x1;
+      const dy = pxWall.y2 - pxWall.y1;
+      const lengthCells = Math.round((Math.abs(dx) + Math.abs(dy)) / state.gridSize);
+      if (lengthCells === 0) return;
+      const lengthRealRaw = lengthCells * state.unitPerCell;
+      const lengthReal = Number.isInteger(lengthRealRaw) ? lengthRealRaw : Number(lengthRealRaw.toFixed(2));
+
+      const cx = (pxWall.x1 + pxWall.x2) / 2;
+      const cy = (pxWall.y1 + pxWall.y2) / 2;
+
+      ctx.save();
+      ctx.fillStyle = isPreview ? colors.wallActive : colors.wallText;
+      ctx.font = '600 14px "Inter", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const label = `${lengthReal} ${state.unitLabel}`;
+      ctx.fillText(label, cx, cy - 12);
+      ctx.restore();
+    }
+
+    function draw() {
+      drawGrid();
+      drawWalls();
+    }
+
+    function updateMetrics() {
+      wallCountEl.textContent = state.walls.length.toString();
+      const totalLengthCells = state.walls.reduce((sum, w) => {
+        return sum + Math.abs(w.x2 - w.x1) + Math.abs(w.y2 - w.y1);
+      }, 0);
+      const totalLengthRaw = totalLengthCells * state.unitPerCell;
+      const totalLength = Number.isInteger(totalLengthRaw) ? totalLengthRaw : Number(totalLengthRaw.toFixed(2));
+      totalLengthEl.textContent = `${totalLength} ${state.unitLabel}`;
+
+      const lastWall = state.walls[state.walls.length - 1];
+      if (!lastWall) {
+        lastWallEl.textContent = '–';
+      } else {
+        const cells = Math.abs(lastWall.x2 - lastWall.x1) + Math.abs(lastWall.y2 - lastWall.y1);
+        const length = cells * state.unitPerCell;
+        const formatted = Number.isInteger(length) ? length : Number(length.toFixed(2));
+        lastWallEl.textContent = `${formatted} ${state.unitLabel}`;
+      }
+    }
+
+    function beginDrawing(evt) {
+      evt.preventDefault();
+      const cell = cellFromEvent(evt);
+      state.startCell = cell;
+      state.isDrawing = true;
+      state.preview = null;
+      if (typeof canvas.setPointerCapture === 'function') {
+        canvas.setPointerCapture(evt.pointerId);
+      }
+    }
+
+    function updatePreview(evt) {
+      if (!state.isDrawing || !state.startCell) return;
+      const currentCell = cellFromEvent(evt);
+      const dx = currentCell.col - state.startCell.col;
+      const dy = currentCell.row - state.startCell.row;
+
+      let endCell = { ...state.startCell };
+      if (Math.abs(dx) >= Math.abs(dy)) {
+        endCell.col += dx;
+      } else {
+        endCell.row += dy;
+      }
+
+      if (endCell.col === state.startCell.col && endCell.row === state.startCell.row) {
+        state.preview = null;
+      } else {
+        state.preview = {
+          x1: state.startCell.col,
+          y1: state.startCell.row,
+          x2: endCell.col,
+          y2: endCell.row,
+        };
+      }
+      draw();
+    }
+
+    function finishDrawing(evt) {
+      if (!state.isDrawing) return;
+      updatePreview(evt);
+      if (state.preview) {
+        state.walls.push(state.preview);
+        state.preview = null;
+        updateMetrics();
+      }
+      state.isDrawing = false;
+      state.startCell = null;
+      draw();
+      if (
+        evt &&
+        evt.pointerId != null &&
+        typeof canvas.hasPointerCapture === 'function' &&
+        canvas.hasPointerCapture(evt.pointerId)
+      ) {
+        canvas.releasePointerCapture(evt.pointerId);
+      }
+    }
+
+    function cancelDrawing(evt) {
+      state.isDrawing = false;
+      state.startCell = null;
+      state.preview = null;
+      draw();
+      if (
+        evt &&
+        evt.pointerId != null &&
+        typeof canvas.hasPointerCapture === 'function' &&
+        canvas.hasPointerCapture(evt.pointerId)
+      ) {
+        canvas.releasePointerCapture(evt.pointerId);
+      }
+    }
+
+    function undoLast() {
+      state.walls.pop();
+      updateMetrics();
+      draw();
+    }
+
+    function clearAll() {
+      state.walls = [];
+      updateMetrics();
+      draw();
+    }
+
+    function downloadPNG() {
+      const link = document.createElement('a');
+      link.download = 'house-plan.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+
+    canvas.addEventListener('pointerdown', beginDrawing);
+    canvas.addEventListener('pointermove', updatePreview);
+    canvas.addEventListener('pointerup', finishDrawing);
+    canvas.addEventListener('pointercancel', cancelDrawing);
+    canvas.addEventListener('pointerleave', cancelDrawing);
+
+    document.getElementById('gridSize').addEventListener('input', (evt) => {
+      const value = Number(evt.target.value);
+      if (!Number.isFinite(value) || value <= 0) return;
+      state.gridSize = value;
+      draw();
     });
+
+    document.getElementById('unitLabel').addEventListener('input', (evt) => {
+      state.unitLabel = evt.target.value.trim() || 'units';
+      updateMetrics();
+      draw();
+    });
+
+    document.getElementById('unitPerCell').addEventListener('input', (evt) => {
+      const value = Number(evt.target.value);
+      if (!Number.isFinite(value) || value <= 0) return;
+      state.unitPerCell = value;
+      updateMetrics();
+      draw();
+    });
+
+    document.getElementById('undoButton').addEventListener('click', () => {
+      if (state.walls.length === 0) return;
+      undoLast();
+    });
+
+    document.getElementById('clearButton').addEventListener('click', () => {
+      if (state.walls.length === 0) return;
+      clearAll();
+    });
+
+    document.getElementById('downloadButton').addEventListener('click', downloadPNG);
+
+    window.addEventListener('resize', resizeCanvas);
+
+    resizeCanvas();
+    updateMetrics();
   </script>
 </body>
 </html>
