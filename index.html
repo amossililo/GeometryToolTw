@@ -182,6 +182,24 @@
       color: var(--ink);
     }
 
+    .status-line {
+      font-size: 0.85rem;
+      color: var(--ink-soft);
+      min-height: 1.2em;
+    }
+
+    .status-line.status-pending {
+      color: var(--accent);
+    }
+
+    .status-line.status-success {
+      color: #047857;
+    }
+
+    .status-line.status-error {
+      color: #dc2626;
+    }
+
     @media (max-width: 880px) {
       body {
         grid-template-columns: 1fr;
@@ -218,17 +236,17 @@
 
     <div class="card" aria-label="Options">
       <label>Grid spacing
-        <input id="gridSize" type="number" min="10" step="5" value="40" aria-describedby="gridHelp" />
+        <input id="gridSize" type="number" min="10" step="5" value="30" aria-describedby="gridHelp" />
       </label>
       <span id="gridHelp" style="font-size:0.85rem; color:var(--ink-soft);">Pixels between grid lines. Larger numbers = bigger rooms.</span>
 
       <label>Real-world scale
-        <input id="unitLabel" type="text" value="cm" aria-describedby="scaleHelp" />
+        <input id="unitLabel" type="text" value="m" aria-describedby="scaleHelp" />
       </label>
       <label>Units per grid square
-        <input id="unitPerCell" type="number" min="1" step="1" value="50" />
+        <input id="unitPerCell" type="number" min="1" step="1" value="1" />
       </label>
-      <span id="scaleHelp" style="font-size:0.85rem; color:var(--ink-soft);">Example: 1 square = 50 cm.</span>
+      <span id="scaleHelp" style="font-size:0.85rem; color:var(--ink-soft);">Example: 1 square = 1 m.</span>
 
       <div class="button-row">
         <button id="undoButton" class="secondary" type="button">Undo</button>
@@ -236,6 +254,19 @@
         <button id="clearButton" class="secondary" type="button">Clear</button>
       </div>
       <button id="downloadButton" type="button">Download PNG</button>
+    </div>
+
+    <div class="card" aria-label="Google Sheets export">
+      <strong>Send metrics to Google Sheets</strong>
+      <label style="flex-direction: column; align-items: stretch; gap: 6px;">
+        Web app URL
+        <input id="sheetsUrl" type="url" inputmode="url" placeholder="https://script.google.com/..." />
+      </label>
+      <p style="margin:0; font-size:0.85rem; color:var(--ink-soft);">
+        Paste the URL of a Google Apps Script web app that appends rows to your sheet.
+      </p>
+      <button id="sendSheetsButton" type="button" class="secondary">Send to Google Sheets</button>
+      <p id="sheetsStatus" class="status-line" role="status" aria-live="polite"></p>
     </div>
 
     <footer style="align-self:end; font-size:0.85rem; color:var(--ink-soft); line-height:1.4;">
@@ -263,6 +294,10 @@
           <span id="totalLength">0</span>
         </div>
         <div class="metric">
+          Enclosed area
+          <span id="enclosedArea">0</span>
+        </div>
+        <div class="metric">
           Last wall
           <span id="lastWall">–</span>
         </div>
@@ -273,24 +308,30 @@
     </div>
   </main>
 
+  <script src="sheets-export.js"></script>
   <script>
     const canvas = document.getElementById('planCanvas');
     const ctx = canvas.getContext('2d');
     const wallCountEl = document.getElementById('wallCount');
     const totalLengthEl = document.getElementById('totalLength');
     const lastWallEl = document.getElementById('lastWall');
+    const areaEl = document.getElementById('enclosedArea');
     const eraseButton = document.getElementById('eraseButton');
+    const sheetsUrlInput = document.getElementById('sheetsUrl');
+    const sheetsStatusEl = document.getElementById('sheetsStatus');
+    const sendSheetsButton = document.getElementById('sendSheetsButton');
 
     const state = {
-      gridSize: 40,
+      gridSize: 30,
       walls: [],
       isDrawing: false,
       preview: null,
-      unitLabel: 'cm',
-      unitPerCell: 50,
+      unitLabel: 'm',
+      unitPerCell: 1,
       selectedWallIndex: null,
       openWallIndexes: new Set(),
       openEndpoints: [],
+      latestMetrics: null,
     };
 
     const dpr = window.devicePixelRatio || 1;
@@ -301,6 +342,8 @@
       startCell: null,
       moved: false,
     };
+
+    let sheetsExporter = null;
 
     function resizeCanvas() {
       const rect = canvas.parentElement.getBoundingClientRect();
@@ -504,23 +547,87 @@
       drawWalls();
     }
 
-    function updateMetrics() {
-      wallCountEl.textContent = state.walls.length.toString();
+    function isPointOnWall(point, wall) {
+      const { x, y } = point;
+      if (wall.x1 === wall.x2 && wall.y1 === wall.y2) {
+        return wall.x1 === x && wall.y1 === y;
+      }
+      if (wall.y1 === wall.y2) {
+        if (y !== wall.y1) return false;
+        const minX = Math.min(wall.x1, wall.x2);
+        const maxX = Math.max(wall.x1, wall.x2);
+        return x >= minX && x <= maxX;
+      }
+      if (wall.x1 === wall.x2) {
+        if (x !== wall.x1) return false;
+        const minY = Math.min(wall.y1, wall.y2);
+        const maxY = Math.max(wall.y1, wall.y2);
+        return y >= minY && y <= maxY;
+      }
+      return false;
+    }
+
+    function computeMetricsSnapshot() {
+      const wallCount = state.walls.length;
       const totalLengthCells = state.walls.reduce((sum, w) => {
         return sum + Math.abs(w.x2 - w.x1) + Math.abs(w.y2 - w.y1);
       }, 0);
-      const totalLengthRaw = totalLengthCells * state.unitPerCell;
-      const totalLength = Number.isInteger(totalLengthRaw) ? totalLengthRaw : Number(totalLengthRaw.toFixed(2));
-      totalLengthEl.textContent = `${totalLength} ${state.unitLabel}`;
+      const totalLengthValue = totalLengthCells * state.unitPerCell;
+      const totalLengthDisplay = Number.isInteger(totalLengthValue)
+        ? totalLengthValue
+        : Number(totalLengthValue.toFixed(2));
 
-      const lastWall = state.walls[state.walls.length - 1];
-      if (!lastWall) {
+      const enclosedCells = computeEnclosedAreaCells();
+      const enclosedAreaValue = enclosedCells * state.unitPerCell * state.unitPerCell;
+      const enclosedAreaDisplay = Number.isInteger(enclosedAreaValue)
+        ? enclosedAreaValue
+        : Number(enclosedAreaValue.toFixed(2));
+
+      const unitLabel = state.unitLabel || 'units';
+
+      const lastWall = state.walls[wallCount - 1];
+      let lastWallLengthValue = null;
+      let lastWallLengthDisplay = null;
+      if (lastWall) {
+        const cells = Math.abs(lastWall.x2 - lastWall.x1) + Math.abs(lastWall.y2 - lastWall.y1);
+        lastWallLengthValue = cells * state.unitPerCell;
+        lastWallLengthDisplay = Number.isInteger(lastWallLengthValue)
+          ? lastWallLengthValue
+          : Number(lastWallLengthValue.toFixed(2));
+      }
+
+      return {
+        wallCount,
+        totalLengthCells,
+        totalLengthValue,
+        totalLengthDisplay,
+        enclosedCells,
+        enclosedAreaValue,
+        enclosedAreaDisplay,
+        unitLabel,
+        lastWallLengthValue,
+        lastWallLengthDisplay,
+        gridSpacing: state.gridSize,
+        unitPerCell: state.unitPerCell,
+      };
+    }
+
+    function updateMetrics() {
+      const metrics = computeMetricsSnapshot();
+      state.latestMetrics = metrics;
+
+      wallCountEl.textContent = metrics.wallCount.toString();
+      totalLengthEl.textContent = `${metrics.totalLengthDisplay} ${metrics.unitLabel}`;
+      areaEl.textContent = `${metrics.enclosedAreaDisplay} ${metrics.unitLabel}²`;
+
+      if (metrics.lastWallLengthDisplay == null) {
         lastWallEl.textContent = '–';
       } else {
-        const cells = Math.abs(lastWall.x2 - lastWall.x1) + Math.abs(lastWall.y2 - lastWall.y1);
-        const length = cells * state.unitPerCell;
-        const formatted = Number.isInteger(length) ? length : Number(length.toFixed(2));
-        lastWallEl.textContent = `${formatted} ${state.unitLabel}`;
+        lastWallEl.textContent = `${metrics.lastWallLengthDisplay} ${metrics.unitLabel}`;
+      }
+
+      if (sheetsExporter && typeof sheetsExporter.setLatestMetrics === 'function') {
+        sheetsExporter.setLatestMetrics(metrics);
       }
     }
 
@@ -543,6 +650,17 @@
         endpointMap.get(endKey).push({ index, point: { x: wall.x2, y: wall.y2 } });
       });
 
+      endpointMap.forEach((entries, key) => {
+        const [xStr, yStr] = key.split(',');
+        const point = { x: Number(xStr), y: Number(yStr) };
+        state.walls.forEach((wall, wallIndex) => {
+          if (entries.some((entry) => entry.index === wallIndex)) return;
+          if (isPointOnWall(point, wall)) {
+            entries.push({ index: wallIndex, point });
+          }
+        });
+      });
+
       const openSet = new Set();
       const openPoints = [];
 
@@ -557,6 +675,79 @@
 
       state.openWallIndexes = openSet;
       state.openEndpoints = openPoints;
+    }
+
+    function computeEnclosedAreaCells() {
+      if (state.walls.length === 0) {
+        return 0;
+      }
+
+      const xs = state.walls.flatMap((wall) => [wall.x1, wall.x2]);
+      const ys = state.walls.flatMap((wall) => [wall.y1, wall.y2]);
+      const minX = Math.min(...xs);
+      const maxX = Math.max(...xs);
+      const minY = Math.min(...ys);
+      const maxY = Math.max(...ys);
+
+      const minXExpanded = minX - 1;
+      const maxXExpanded = maxX + 1;
+      const minYExpanded = minY - 1;
+      const maxYExpanded = maxY + 1;
+
+      const horizontalSegments = new Set();
+      const verticalSegments = new Set();
+
+      state.walls.forEach((wall) => {
+        if (wall.y1 === wall.y2) {
+          const y = wall.y1;
+          const start = Math.min(wall.x1, wall.x2);
+          const end = Math.max(wall.x1, wall.x2);
+          for (let x = start; x < end; x += 1) {
+            horizontalSegments.add(`${x},${y}`);
+          }
+        } else if (wall.x1 === wall.x2) {
+          const x = wall.x1;
+          const start = Math.min(wall.y1, wall.y2);
+          const end = Math.max(wall.y1, wall.y2);
+          for (let y = start; y < end; y += 1) {
+            verticalSegments.add(`${x},${y}`);
+          }
+        }
+      });
+
+      const width = maxXExpanded - minXExpanded;
+      const height = maxYExpanded - minYExpanded;
+      const visited = Array.from({ length: height }, () => Array(width).fill(false));
+      const queue = [];
+
+      const enqueue = (cx, cy) => {
+        const ix = cx - minXExpanded;
+        const iy = cy - minYExpanded;
+        if (ix < 0 || ix >= width || iy < 0 || iy >= height) return;
+        if (visited[iy][ix]) return;
+        visited[iy][ix] = true;
+        queue.push({ cx, cy });
+      };
+
+      enqueue(minXExpanded, minYExpanded);
+
+      for (let i = 0; i < queue.length; i += 1) {
+        const { cx, cy } = queue[i];
+
+        if (!verticalSegments.has(`${cx + 1},${cy}`)) enqueue(cx + 1, cy);
+        if (!verticalSegments.has(`${cx},${cy}`)) enqueue(cx - 1, cy);
+        if (!horizontalSegments.has(`${cx},${cy + 1}`)) enqueue(cx, cy + 1);
+        if (!horizontalSegments.has(`${cx},${cy}`)) enqueue(cx, cy - 1);
+      }
+
+      let enclosedCells = 0;
+      for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+          if (!visited[y][x]) enclosedCells += 1;
+        }
+      }
+
+      return enclosedCells;
     }
 
     function updateEraseButton() {
@@ -715,6 +906,42 @@
       link.download = 'house-plan.png';
       link.href = canvas.toDataURL('image/png');
       link.click();
+    }
+
+    if (
+      typeof window.setupSheetsExport === 'function' &&
+      sheetsUrlInput &&
+      sendSheetsButton &&
+      sheetsStatusEl
+    ) {
+      sheetsExporter = window.setupSheetsExport({
+        urlInput: sheetsUrlInput,
+        triggerButton: sendSheetsButton,
+        statusElement: sheetsStatusEl,
+        getMetrics: () => {
+          const metrics = state.latestMetrics ?? computeMetricsSnapshot();
+          return {
+            timestamp: new Date().toISOString(),
+            metrics: {
+              area: metrics.enclosedAreaValue,
+              areaLabel: `${metrics.enclosedAreaDisplay} ${metrics.unitLabel}²`,
+              areaCells: metrics.enclosedCells,
+              wallCount: metrics.wallCount,
+              totalWallLength: metrics.totalLengthValue,
+              totalWallLengthLabel: `${metrics.totalLengthDisplay} ${metrics.unitLabel}`,
+              totalWallLengthCells: metrics.totalLengthCells,
+              lastWallLength: metrics.lastWallLengthValue,
+              lastWallLengthLabel:
+                metrics.lastWallLengthDisplay == null
+                  ? null
+                  : `${metrics.lastWallLengthDisplay} ${metrics.unitLabel}`,
+              unitLabel: metrics.unitLabel,
+              unitsPerSquare: metrics.unitPerCell,
+              gridSpacing: metrics.gridSpacing,
+            },
+          };
+        },
+      });
     }
 
     canvas.addEventListener('pointerdown', handlePointerDown);
