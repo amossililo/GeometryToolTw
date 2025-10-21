@@ -47,12 +47,6 @@ function doPost(e) {
   }
 }
 
-function doGet(e) {
-  return ContentService
-    .createTextOutput(JSON.stringify({ ok: true, hint: "POST JSON to this URL" }))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
 function parseRequestBody(contents) {
   try {
     return JSON.parse(contents);

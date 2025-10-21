@@ -110,17 +110,31 @@
 
         const response = await fetch(url, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify(payload),
         });
 
         const responseText = await response.text().catch(() => '');
-        if (!response.ok) {
-          const message = responseText || `Request failed with status ${response.status}`;
+        let responseJson = null;
+        if (responseText) {
+          try {
+            responseJson = JSON.parse(responseText);
+          } catch (parseError) {
+            // Ignore JSON parse errors and fall back to raw text messaging.
+          }
+        }
+
+        if (!response.ok || (responseJson && responseJson.success === false)) {
+          const message =
+            (responseJson && responseJson.message) ||
+            responseText ||
+            `Request failed with status ${response.status}`;
           throw new Error(message);
         }
 
-        this.showStatus('Metrics sent to Google Sheets.', 'success');
+        const successMessage =
+          (responseJson && responseJson.message) || 'Metrics sent to Google Sheets.';
+        this.showStatus(successMessage, 'success');
       } catch (error) {
         const message = error && error.message ? error.message : 'Unknown error while sending data.';
         this.showStatus(`Failed to send metrics: ${message}`, 'error');
