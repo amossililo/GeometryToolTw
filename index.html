@@ -569,6 +569,8 @@
 
     function computeMetricsSnapshot() {
       const wallCount = state.walls.length;
+    function updateMetrics() {
+      wallCountEl.textContent = state.walls.length.toString();
       const totalLengthCells = state.walls.reduce((sum, w) => {
         return sum + Math.abs(w.x2 - w.x1) + Math.abs(w.y2 - w.y1);
       }, 0);
@@ -621,6 +623,14 @@
       areaEl.textContent = `${metrics.enclosedAreaDisplay} ${metrics.unitLabel}²`;
 
       if (metrics.lastWallLengthDisplay == null) {
+      const enclosedCells = computeEnclosedAreaCells();
+      const areaRaw = enclosedCells * state.unitPerCell * state.unitPerCell;
+      const areaFormatted = Number.isInteger(areaRaw) ? areaRaw : Number(areaRaw.toFixed(2));
+      const unitLabel = state.unitLabel || 'units';
+      areaEl.textContent = `${areaFormatted} ${unitLabel}²`;
+
+      const lastWall = state.walls[state.walls.length - 1];
+      if (!lastWall) {
         lastWallEl.textContent = '–';
       } else {
         lastWallEl.textContent = `${metrics.lastWallLengthDisplay} ${metrics.unitLabel}`;
