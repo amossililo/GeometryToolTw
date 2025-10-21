@@ -142,6 +142,7 @@
       position: relative;
       overflow: hidden;
       background: #fff;
+      min-height: 420px;
     }
 
     canvas {
@@ -346,11 +347,44 @@
     let sheetsExporter = null;
 
     function resizeCanvas() {
-      const rect = canvas.parentElement.getBoundingClientRect();
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      canvas.style.width = rect.width + 'px';
-      canvas.style.height = rect.height + 'px';
+      const wrapper = canvas.parentElement;
+      const rect = wrapper.getBoundingClientRect();
+
+      let displayWidth = rect.width;
+      if (!displayWidth || displayWidth < 1) {
+        displayWidth = wrapper.clientWidth || canvas.clientWidth || window.innerWidth || 800;
+      }
+
+      let displayHeight = rect.height;
+      if (!displayHeight || displayHeight < 1) {
+        displayHeight = wrapper.clientHeight;
+
+        if (!displayHeight || displayHeight < 1) {
+          const mainEl = wrapper.closest('main');
+          if (mainEl) {
+            const mainRect = mainEl.getBoundingClientRect();
+            if (mainRect.height) {
+              const topBar = mainEl.querySelector('.top-bar');
+              const footer = mainEl.querySelector('.footer');
+              let available = mainRect.height;
+              if (topBar) available -= topBar.getBoundingClientRect().height;
+              if (footer) available -= footer.getBoundingClientRect().height;
+              if (available > 0) displayHeight = available;
+            }
+          }
+        }
+
+        if (!displayHeight || displayHeight < 1) {
+          displayHeight = Math.max(window.innerHeight - 200, 320);
+        }
+
+        wrapper.style.minHeight = `${Math.max(displayHeight, 320)}px`;
+      }
+
+      canvas.width = displayWidth * dpr;
+      canvas.height = displayHeight * dpr;
+      canvas.style.width = `${displayWidth}px`;
+      canvas.style.height = `${displayHeight}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       draw();
     }
@@ -569,8 +603,6 @@
 
     function computeMetricsSnapshot() {
       const wallCount = state.walls.length;
-    function updateMetrics() {
-      wallCountEl.textContent = state.walls.length.toString();
       const totalLengthCells = state.walls.reduce((sum, w) => {
         return sum + Math.abs(w.x2 - w.x1) + Math.abs(w.y2 - w.y1);
       }, 0);
@@ -623,14 +655,6 @@
       areaEl.textContent = `${metrics.enclosedAreaDisplay} ${metrics.unitLabel}²`;
 
       if (metrics.lastWallLengthDisplay == null) {
-      const enclosedCells = computeEnclosedAreaCells();
-      const areaRaw = enclosedCells * state.unitPerCell * state.unitPerCell;
-      const areaFormatted = Number.isInteger(areaRaw) ? areaRaw : Number(areaRaw.toFixed(2));
-      const unitLabel = state.unitLabel || 'units';
-      areaEl.textContent = `${areaFormatted} ${unitLabel}²`;
-
-      const lastWall = state.walls[state.walls.length - 1];
-      if (!lastWall) {
         lastWallEl.textContent = '–';
       } else {
         lastWallEl.textContent = `${metrics.lastWallLengthDisplay} ${metrics.unitLabel}`;
