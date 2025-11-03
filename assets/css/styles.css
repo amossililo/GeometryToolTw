@@ -27,6 +27,8 @@ body {
   color: var(--ink);
   display: flex;
   flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
 }
 
 button,
@@ -38,7 +40,7 @@ p {
 }
 
 button {
-  padding: 12px 14px;
+  padding: 10px 14px;
   border-radius: 12px;
   border: none;
   background: var(--accent);
@@ -46,11 +48,6 @@ button {
   font-weight: 600;
   cursor: pointer;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-
-button.secondary {
-  background: #e5e7eb;
-  color: var(--ink);
 }
 
 button:hover {
@@ -99,69 +96,120 @@ input:focus {
   color: #dc2626;
 }
 
-.ribbon {
-  position: sticky;
-  top: 0;
+.command-bar {
+  position: relative;
   z-index: 10;
   background: var(--panel);
   border-bottom: 1px solid #e5e7eb;
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05);
-}
-
-.ribbon-inner {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 16px 24px 12px;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+  padding: 10px 18px 8px;
   display: grid;
-  gap: 16px;
+  gap: 6px;
 }
 
-.ribbon-tabs {
+.command-bar-inner {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
 }
 
-.ribbon-tab {
-  padding: 10px 18px;
+.command-button {
+  padding: 6px 14px;
   border-radius: 999px;
-  background: transparent;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.85rem;
+  line-height: 1.2;
+  border: none;
+  box-shadow: none;
+}
+
+.command-button:hover {
+  transform: none;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.22);
+}
+
+.command-button.is-active {
+  background: var(--ink);
+}
+
+.command-button[disabled] {
+  background: #d1d5db;
+  color: #6b7280;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.command-button--ghost {
+  background: rgba(15, 23, 42, 0.05);
+  color: var(--ink);
+}
+
+.command-button--ghost:hover {
+  background: rgba(15, 23, 42, 0.12);
+  box-shadow: none;
+  transform: none;
+}
+
+.command-button--secondary {
+  background: #e5e7eb;
+  color: var(--ink);
+}
+
+.command-button--secondary:hover {
+  background: #d1d5db;
+  box-shadow: none;
+}
+
+.command-hint {
+  margin: 0;
+  font-size: 0.78rem;
   color: var(--ink-soft);
-  border: 1px solid transparent;
-  font-weight: 600;
+  min-height: 1.1em;
+  padding-left: 4px;
 }
 
-.ribbon-tab.is-active {
-  background: var(--accent-soft);
-  color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+.command-hint[data-tone='success'] {
+  color: #047857;
 }
 
-.ribbon-panels {
-  display: grid;
-  gap: 16px;
+.command-hint[data-tone='error'] {
+  color: #dc2626;
 }
 
-.ribbon-panel {
-  display: none;
+.setup-panel {
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translate(-50%, 12px);
   background: var(--panel);
-  border-radius: 18px;
-  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  border: 1px solid #d1d5db;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.18);
   padding: 20px;
+  width: min(940px, calc(100vw - 32px));
+  z-index: 20;
+}
+
+.setup-panel[hidden] {
+  display: none;
+}
+
+.setup-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 20px;
 }
 
-.ribbon-panel.is-active {
-  display: grid;
-}
-
-.command-group {
+.setup-section {
   display: grid;
   gap: 12px;
 }
 
-.command-group h2 {
+.setup-section h2 {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.95rem;
   color: var(--ink);
 }
 
@@ -184,51 +232,6 @@ input:focus {
 
 .field-stacked {
   grid-template-columns: 1fr;
-}
-
-.button-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 10px;
-}
-
-.tool-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.tool-button {
-  border-radius: 12px;
-  border: 1px solid #d1d5db;
-  background: #f8fafc;
-  color: var(--ink);
-  padding: 10px 16px;
-  transition: background 0.15s ease;
-}
-
-.tool-button:hover {
-  background: #eef2ff;
-}
-
-.tool-button.is-active {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
-}
-
-.command-hint {
-  min-height: 1.2em;
-  margin: 0;
-  padding-left: 4px;
-}
-
-.command-hint[data-tone='success'] {
-  color: #047857;
-}
-
-.command-hint[data-tone='error'] {
-  color: #dc2626;
 }
 
 .app-layout {
@@ -255,8 +258,8 @@ h1 {
 }
 
 aside p {
-  font-size: 0.88rem;
-  line-height: 1.45;
+  font-size: 0.82rem;
+  line-height: 1.35;
 }
 
 .card {
@@ -269,8 +272,8 @@ aside p {
 }
 
 .instructions-card {
-  font-size: 0.84rem;
-  line-height: 1.45;
+  font-size: 0.78rem;
+  line-height: 1.4;
 }
 
 .instructions-list {
@@ -283,7 +286,7 @@ aside p {
 
 .tip-footer {
   margin-top: auto;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   color: var(--ink-soft);
   line-height: 1.4;
 }
@@ -299,18 +302,6 @@ main {
   display: flex;
   flex-direction: column;
   min-height: 0;
-}
-
-.top-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  padding: 16px 24px;
-  background: rgba(255, 255, 255, 0.85);
-  border-bottom: 1px solid #e5e7eb;
-  backdrop-filter: blur(12px);
-  font-size: 0.88rem;
-  color: var(--ink-soft);
 }
 
 .canvas-wrapper {
@@ -378,6 +369,42 @@ canvas {
   color: rgba(248, 250, 252, 0.85);
 }
 
+.opening-prompt {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.48);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 30;
+}
+
+.opening-prompt[hidden] {
+  display: none;
+}
+
+.opening-prompt__content {
+  background: #fff;
+  border-radius: 18px;
+  padding: 24px;
+  width: min(420px, 100%);
+  display: grid;
+  gap: 16px;
+  box-shadow: 0 28px 60px rgba(15, 23, 42, 0.26);
+}
+
+.opening-form {
+  display: grid;
+  gap: 16px;
+}
+
+.opening-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 @media (max-width: 1020px) {
   .metrics-overlay {
     position: static;
@@ -408,19 +435,24 @@ canvas {
 }
 
 @media (max-width: 640px) {
-  .ribbon-inner {
-    padding: 16px 16px 12px;
+  .command-bar {
+    padding: 8px 12px 6px;
   }
 
-  .button-row {
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  .command-bar-inner {
+    gap: 6px;
+  }
+
+  .command-button {
+    padding: 6px 10px;
+    font-size: 0.78rem;
+  }
+
+  .setup-panel {
+    width: min(420px, calc(100vw - 24px));
   }
 
   .metrics-overlay {
     padding: 16px;
-  }
-
-  .tool-row {
-    gap: 6px;
   }
 }

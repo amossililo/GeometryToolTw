@@ -30,6 +30,12 @@ export function setupPointerHandlers(canvas, drawing, callbacks) {
         return;
       }
 
+      const preset = state.openingPresets ? state.openingPresets[state.activeTool] : null;
+      if (!preset || !Number.isFinite(preset.width) || !Number.isFinite(preset.height)) {
+        onToolFeedback({ type: 'error', message: 'Set valid dimensions before placing that opening.' });
+        return;
+      }
+
       const wall = state.walls[wallIndex];
       const px = drawing.wallToPixels(wall);
       const isHorizontal = px.y1 === px.y2;
@@ -46,6 +52,8 @@ export function setupPointerHandlers(canvas, drawing, callbacks) {
       const result = addOpeningToWall(wallIndex, {
         type: state.activeTool,
         position,
+        width: preset.width,
+        height: preset.height,
       });
 
       state.selectedWallIndex = wallIndex;
@@ -62,6 +70,8 @@ export function setupPointerHandlers(canvas, drawing, callbacks) {
         const message =
           result.reason === 'too-short'
             ? 'This wall is too short for that opening. Try a longer wall.'
+            : result.reason === 'missing-dimensions'
+            ? 'Opening dimensions are missing. Re-open the tool to set them.'
             : 'Select a wall before placing an opening.';
         onToolFeedback({ type: 'error', message });
       }

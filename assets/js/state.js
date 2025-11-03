@@ -10,6 +10,10 @@ export const state = {
   openEndpoints: [],
   latestMetrics: null,
   activeTool: 'draw',
+  openingPresets: {
+    window: { width: 1.5, height: 1.2 },
+    door: { width: 0.9, height: 2 },
+  },
 };
 
 export const pointerSession = {

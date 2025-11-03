@@ -30,6 +30,24 @@ export function computeMetricsSnapshot() {
       : Number(lastWallLengthValue.toFixed(2));
   }
 
+  let windowArea = 0;
+  let doorArea = 0;
+  state.walls.forEach((wall) => {
+    if (!wall || !Array.isArray(wall.features)) return;
+    wall.features.forEach((feature) => {
+      if (!feature || !feature.type) return;
+      const area = Number.isFinite(feature.area)
+        ? feature.area
+        : Number(feature.widthUnits) * Number(feature.heightUnits);
+      if (!Number.isFinite(area) || area <= 0) return;
+      if (feature.type === 'door') {
+        doorArea += area;
+      } else if (feature.type === 'window') {
+        windowArea += area;
+      }
+    });
+  });
+
   return {
     wallCount,
     totalLengthCells,
@@ -43,6 +61,8 @@ export function computeMetricsSnapshot() {
     lastWallLengthDisplay,
     gridSpacing: state.gridSize,
     unitPerCell: state.unitPerCell,
+    windowArea,
+    doorArea,
   };
 }
 

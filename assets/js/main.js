@@ -4,42 +4,60 @@ import { setupPointerHandlers } from './pointerHandlers.js';
 import { createWallActions } from './wallActions.js';
 import { computeConnectivity } from './connectivity.js';
 import { createMetricsManager, computeMetricsSnapshot } from './metrics.js';
-import { selectedWallHasOpenings } from './openings.js';
+import { selectedWallHasOpenings, getOpeningPreset, setOpeningPreset } from './openings.js';
 
 const canvas = document.getElementById('planCanvas');
 const wallCountEl = document.getElementById('wallCount');
 const totalLengthEl = document.getElementById('totalLength');
 const lastWallEl = document.getElementById('lastWall');
 const areaEl = document.getElementById('enclosedArea');
+
+const setupToggle = document.getElementById('setupToggle');
+const setupPanel = document.getElementById('setupPanel');
+
+const drawToolButton = document.getElementById('drawToolButton');
+const windowToolButton = document.getElementById('windowToolButton');
+const doorToolButton = document.getElementById('doorToolButton');
+
+const undoButton = document.getElementById('undoButton');
+const clearButton = document.getElementById('clearButton');
 const eraseButton = document.getElementById('eraseButton');
+const downloadButton = document.getElementById('downloadButton');
+const clearOpeningsButton = document.getElementById('clearOpeningsButton');
+
 const sheetsUrlInput = document.getElementById('sheetsUrl');
 const sheetsStatusEl = document.getElementById('sheetsStatus');
 const sendSheetsButton = document.getElementById('sendSheetsButton');
+
 const unitLabelInput = document.getElementById('unitLabel');
 const unitPerCellInput = document.getElementById('unitPerCell');
 const gridSizeInput = document.getElementById('gridSize');
-const undoButton = document.getElementById('undoButton');
-const clearButton = document.getElementById('clearButton');
-const downloadButton = document.getElementById('downloadButton');
-const clearOpeningsButton = document.getElementById('clearOpeningsButton');
+
 const commandHintEl = document.getElementById('commandHint');
-const tabButtons = document.querySelectorAll('[role="tab"][data-tab]');
-const tabPanels = document.querySelectorAll('.ribbon-panel');
-const toolButtons = document.querySelectorAll('[data-tool]');
+
+const openingPrompt = document.getElementById('openingPrompt');
+const openingForm = document.getElementById('openingForm');
+const openingCancelButton = document.getElementById('openingCancel');
+const openingWidthInput = document.getElementById('openingWidth');
+const openingHeightInput = document.getElementById('openingHeight');
+const openingPromptTitle = document.getElementById('openingPromptTitle');
+const openingPromptDescription = document.getElementById('openingPromptDescription');
+
+const toolButtons = [drawToolButton, windowToolButton, doorToolButton].filter(Boolean);
 
 const drawing = createCanvasDrawing(canvas);
 const metricsManager = createMetricsManager({ wallCountEl, totalLengthEl, lastWallEl, areaEl });
 
-function updateEraseButton() {
-  eraseButton.disabled = state.selectedWallIndex == null;
-}
-
-function updateClearOpeningsButton() {
-  if (!clearOpeningsButton) return;
-  clearOpeningsButton.disabled = !selectedWallHasOpenings();
-}
-
+let sheetsExporter = null;
 let hintTimeout = null;
+let pendingOpeningType = null;
+let lastOpeningTrigger = null;
+
+function formatNumber(value) {
+  if (!Number.isFinite(value)) return '';
+  const rounded = Math.round(value * 100) / 100;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toString();
+}
 
 function showCommandHint(message, tone = 'info') {
   if (!commandHintEl) return;
@@ -56,38 +74,96 @@ function showCommandHint(message, tone = 'info') {
   }
 }
 
-function activateTab(tabName) {
-  tabButtons.forEach((btn) => {
-    const isActive = btn.dataset.tab === tabName;
-    btn.classList.toggle('is-active', isActive);
-    btn.setAttribute('aria-selected', String(isActive));
-    btn.setAttribute('tabindex', isActive ? '0' : '-1');
-  });
-  tabPanels.forEach((panel) => {
-    const isActive = panel.dataset.tab === tabName;
-    panel.classList.toggle('is-active', isActive);
-    panel.setAttribute('aria-hidden', String(!isActive));
+function updateEraseButton() {
+  if (!eraseButton) return;
+  eraseButton.disabled = state.selectedWallIndex == null;
+}
+
+function updateClearOpeningsButton() {
+  if (!clearOpeningsButton) return;
+  clearOpeningsButton.disabled = !selectedWallHasOpenings();
+}
+
+function updateToolStates(activeTool) {
+  toolButtons.forEach((button) => {
+    if (!button || !button.dataset.tool) return;
+    const isActive = button.dataset.tool === activeTool;
+    button.classList.toggle('is-active', isActive);
+    button.setAttribute('aria-pressed', String(isActive));
   });
 }
 
 function setActiveTool(tool) {
   state.activeTool = tool;
-  toolButtons.forEach((button) => {
-    const isActive = button.dataset.tool === tool;
-    button.classList.toggle('is-active', isActive);
-    button.setAttribute('aria-pressed', String(isActive));
-  });
+  updateToolStates(tool);
 
   if (tool === 'draw') {
     showCommandHint('Drag on the grid to create new walls.', 'info');
-  } else if (tool === 'window') {
-    showCommandHint('Click any wall to drop a window in place.', 'info');
+    return;
+  }
+
+  const preset = getOpeningPreset(tool);
+  const unitLabel = state.unitLabel || 'units';
+  if (!preset) {
+    showCommandHint('Set dimensions for that opening before placing it.', 'error');
+    return;
+  }
+
+  const sizeMessage = `${formatNumber(preset.width)} × ${formatNumber(preset.height)} ${unitLabel}`;
+  if (tool === 'window') {
+    showCommandHint(`Window tool ready (${sizeMessage}). Click a wall to place it.`, 'info');
   } else if (tool === 'door') {
-    showCommandHint('Click a wall to insert a door.', 'info');
+    showCommandHint(`Door tool ready (${sizeMessage}). Click a wall to place it.`, 'info');
   }
 }
 
-let sheetsExporter = null;
+function toggleSetupPanel(forceState) {
+  if (!setupPanel || !setupToggle) return;
+  const isOpen = forceState != null ? forceState : setupPanel.hasAttribute('hidden');
+  if (isOpen) {
+    setupPanel.removeAttribute('hidden');
+  } else {
+    setupPanel.setAttribute('hidden', '');
+  }
+  setupToggle.setAttribute('aria-expanded', String(isOpen));
+}
+
+function closeSetupPanel() {
+  if (!setupPanel || setupPanel.hasAttribute('hidden')) return;
+  setupPanel.setAttribute('hidden', '');
+  if (setupToggle) {
+    setupToggle.setAttribute('aria-expanded', 'false');
+  }
+}
+
+function openOpeningPrompt(type, triggerButton) {
+  if (!openingPrompt || !openingForm || !openingWidthInput || !openingHeightInput) return;
+  closeSetupPanel();
+  pendingOpeningType = type;
+  lastOpeningTrigger = triggerButton || null;
+
+  const preset = getOpeningPreset(type) || { width: 1, height: 1 };
+  openingPrompt.dataset.tool = type;
+  openingPromptTitle.textContent = type === 'door' ? 'Door dimensions' : 'Window dimensions';
+  const unitLabel = state.unitLabel || 'units';
+  openingPromptDescription.textContent = `Enter the ${type} width and height in ${unitLabel}. The last values you used are pre-filled.`;
+  const widthValue = Number.isFinite(preset.width) && preset.width > 0 ? preset.width : 1;
+  const heightValue = Number.isFinite(preset.height) && preset.height > 0 ? preset.height : 1;
+  openingWidthInput.value = String(widthValue);
+  openingHeightInput.value = String(heightValue);
+  openingPrompt.removeAttribute('hidden');
+  openingWidthInput.focus();
+}
+
+function closeOpeningPrompt({ focusTrigger = true } = {}) {
+  if (!openingPrompt) return;
+  openingPrompt.setAttribute('hidden', '');
+  pendingOpeningType = null;
+  if (focusTrigger && lastOpeningTrigger && typeof lastOpeningTrigger.focus === 'function') {
+    lastOpeningTrigger.focus();
+  }
+  lastOpeningTrigger = null;
+}
 
 function handleWallsChanged() {
   computeConnectivity();
@@ -121,6 +197,7 @@ const wallActions = createWallActions({
 });
 
 function downloadPNG() {
+  if (!canvas) return;
   const link = document.createElement('a');
   link.download = 'house-plan.png';
   link.href = canvas.toDataURL('image/png');
@@ -152,6 +229,83 @@ if (unitPerCellInput) {
   });
 }
 
+if (setupToggle) {
+  setupToggle.addEventListener('click', () => {
+    const willOpen = setupPanel && setupPanel.hasAttribute('hidden');
+    toggleSetupPanel(willOpen);
+    if (willOpen && setupPanel) {
+      setupPanel.focus?.();
+    }
+  });
+}
+
+document.addEventListener('click', (evt) => {
+  if (!setupPanel || setupPanel.hasAttribute('hidden')) return;
+  const target = evt.target;
+  if (setupPanel.contains(target) || setupToggle === target || setupToggle?.contains(target)) {
+    return;
+  }
+  closeSetupPanel();
+});
+
+if (drawToolButton) {
+  drawToolButton.addEventListener('click', () => {
+    closeOpeningPrompt({ focusTrigger: false });
+    setActiveTool('draw');
+  });
+}
+
+if (windowToolButton) {
+  windowToolButton.addEventListener('click', () => {
+    openOpeningPrompt('window', windowToolButton);
+  });
+}
+
+if (doorToolButton) {
+  doorToolButton.addEventListener('click', () => {
+    openOpeningPrompt('door', doorToolButton);
+  });
+}
+
+if (openingCancelButton) {
+  openingCancelButton.addEventListener('click', () => {
+    closeOpeningPrompt();
+    setActiveTool('draw');
+  });
+}
+
+if (openingPrompt) {
+  openingPrompt.addEventListener('click', (evt) => {
+    if (evt.target === openingPrompt) {
+      closeOpeningPrompt();
+      setActiveTool('draw');
+    }
+  });
+}
+
+if (openingForm) {
+  openingForm.addEventListener('submit', (evt) => {
+    evt.preventDefault();
+    if (!pendingOpeningType) return;
+    const toolType = pendingOpeningType;
+    const width = Number(openingWidthInput?.value);
+    const height = Number(openingHeightInput?.value);
+    if (!Number.isFinite(width) || width <= 0 || !Number.isFinite(height) || height <= 0) {
+      showCommandHint('Enter positive values for width and height.', 'error');
+      return;
+    }
+
+    const saved = setOpeningPreset(toolType, { width, height });
+    if (!saved) {
+      showCommandHint('Enter positive values for width and height.', 'error');
+      return;
+    }
+
+    closeOpeningPrompt({ focusTrigger: false });
+    setActiveTool(toolType);
+  });
+}
+
 if (undoButton) {
   undoButton.addEventListener('click', () => {
     wallActions.undoLast();
@@ -161,6 +315,7 @@ if (undoButton) {
 if (clearButton) {
   clearButton.addEventListener('click', () => {
     wallActions.clearAll();
+    setActiveTool('draw');
   });
 }
 
@@ -186,27 +341,6 @@ if (clearOpeningsButton) {
     drawing.draw();
   });
 }
-
-tabButtons.forEach((button) => {
-  button.addEventListener('click', () => {
-    activateTab(button.dataset.tab);
-  });
-});
-
-toolButtons.forEach((button) => {
-  button.addEventListener('click', () => {
-    setActiveTool(button.dataset.tool);
-  });
-});
-
-activateTab('home');
-setActiveTool(state.activeTool || 'draw');
-
-window.addEventListener('keydown', (evt) => {
-  if (evt.key === 'Escape') {
-    setActiveTool('draw');
-  }
-});
 
 if (
   typeof window.setupSheetsExport === 'function' &&
@@ -238,11 +372,33 @@ if (
           unitLabel: metrics.unitLabel,
           unitsPerSquare: metrics.unitPerCell,
           gridSpacing: metrics.gridSpacing,
+          windowArea: metrics.windowArea,
+          windowAreaLabel:
+            metrics.windowArea > 0
+              ? `${formatNumber(metrics.windowArea)} ${metrics.unitLabel}²`
+              : null,
+          doorArea: metrics.doorArea,
+          doorAreaLabel:
+            metrics.doorArea > 0
+              ? `${formatNumber(metrics.doorArea)} ${metrics.unitLabel}²`
+              : null,
         },
       };
     },
   });
 }
+
+window.addEventListener('keydown', (evt) => {
+  if (evt.key === 'Escape') {
+    if (openingPrompt && !openingPrompt.hasAttribute('hidden')) {
+      closeOpeningPrompt();
+    }
+    if (setupPanel && !setupPanel.hasAttribute('hidden')) {
+      closeSetupPanel();
+    }
+    setActiveTool('draw');
+  }
+});
 
 window.addEventListener('resize', () => {
   drawing.resizeCanvas();
@@ -250,3 +406,4 @@ window.addEventListener('resize', () => {
 
 drawing.resizeCanvas();
 handleWallsChanged();
+setActiveTool(state.activeTool || 'draw');

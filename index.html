@@ -7,114 +7,80 @@
     <link rel="stylesheet" href="assets/css/styles.css" />
   </head>
   <body>
-    <header class="ribbon" role="region" aria-label="Drawing commands">
-      <div class="ribbon-inner">
-        <nav class="ribbon-tabs" role="tablist" aria-label="Command tabs">
-          <button
-            id="tab-home"
-            class="ribbon-tab is-active"
-            type="button"
-            role="tab"
-            aria-selected="true"
-            aria-controls="panel-home"
-            data-tab="home"
-          >
-            Home
-          </button>
-          <button
-            id="tab-insert"
-            class="ribbon-tab"
-            type="button"
-            role="tab"
-            aria-selected="false"
-            aria-controls="panel-insert"
-            data-tab="insert"
-          >
-            Insert
-          </button>
-        </nav>
-
-        <div class="ribbon-panels">
-          <section
-            id="panel-home"
-            class="ribbon-panel is-active"
-            role="tabpanel"
-            aria-labelledby="tab-home"
-            data-tab="home"
-          >
-            <div class="command-group">
-              <h2>Drawing setup</h2>
-              <div class="field-grid">
-                <label class="field">
-                  <span>Grid spacing</span>
-                  <input id="gridSize" type="number" min="10" step="5" value="30" aria-describedby="gridHelp" />
-                </label>
-                <label class="field">
-                  <span>Real-world scale</span>
-                  <input id="unitLabel" type="text" value="m" aria-describedby="scaleHelp" />
-                </label>
-                <label class="field">
-                  <span>Units per grid square</span>
-                  <input id="unitPerCell" type="number" min="1" step="1" value="1" />
-                </label>
-              </div>
-              <p id="gridHelp" class="helper-text">
-                Larger grid spacing produces wider rooms. Adjust the scale labels to match your plan.
-              </p>
-              <p id="scaleHelp" class="helper-text">
-                Example: set the unit label to feet or metres and choose how many units each grid square represents.
-              </p>
-            </div>
-
-            <div class="command-group">
-              <h2>Wall tools</h2>
-              <div class="button-row">
-                <button id="undoButton" class="secondary" type="button">Undo</button>
-                <button id="eraseButton" class="secondary" type="button" disabled>Erase selected</button>
-                <button id="clearButton" class="secondary" type="button">Clear</button>
-                <button id="downloadButton" type="button">Download PNG</button>
-              </div>
-            </div>
-
-            <div class="command-group">
-              <h2>Export</h2>
-              <label class="field field-stacked">
-                <span>Google Apps Script URL</span>
-                <input id="sheetsUrl" type="url" inputmode="url" placeholder="https://script.google.com/..." />
+    <header class="command-bar" role="region" aria-label="Drawing commands">
+      <div class="command-bar-inner">
+        <button
+          id="setupToggle"
+          class="command-button command-button--ghost"
+          type="button"
+          aria-expanded="false"
+          aria-controls="setupPanel"
+        >
+          Drawing setup
+        </button>
+        <button
+          id="drawToolButton"
+          class="command-button is-active"
+          type="button"
+          data-tool="draw"
+          aria-pressed="true"
+        >
+          Draw walls
+        </button>
+        <button id="undoButton" class="command-button" type="button">Undo</button>
+        <button id="eraseButton" class="command-button" type="button" disabled>Erase selected</button>
+        <button id="clearButton" class="command-button" type="button">Clear plan</button>
+        <button id="downloadButton" class="command-button" type="button">Download PNG</button>
+        <button id="windowToolButton" class="command-button" type="button" data-tool="window" aria-pressed="false">
+          Insert window
+        </button>
+        <button id="doorToolButton" class="command-button" type="button" data-tool="door" aria-pressed="false">
+          Insert door
+        </button>
+        <button id="clearOpeningsButton" class="command-button" type="button" disabled>Delete openings</button>
+      </div>
+      <div id="setupPanel" class="setup-panel" hidden tabindex="-1">
+        <div class="setup-grid">
+          <section aria-labelledby="setupHeading" class="setup-section">
+            <h2 id="setupHeading">Grid &amp; scale</h2>
+            <div class="field-grid">
+              <label class="field">
+                <span>Grid spacing</span>
+                <input id="gridSize" type="number" min="10" step="5" value="30" aria-describedby="gridHelp" />
               </label>
-              <p class="helper-text">
-                Paste the URL for the Apps Script web app that appends rows to your sheet, then send the current metrics.
-              </p>
-              <button id="sendSheetsButton" type="button" class="secondary">Send to Google Sheets</button>
-              <p id="sheetsStatus" class="status-line" role="status" aria-live="polite"></p>
+              <label class="field">
+                <span>Real-world scale label</span>
+                <input id="unitLabel" type="text" value="m" aria-describedby="scaleHelp" />
+              </label>
+              <label class="field">
+                <span>Units per grid square</span>
+                <input id="unitPerCell" type="number" min="1" step="1" value="1" />
+              </label>
             </div>
+            <p id="gridHelp" class="helper-text">
+              Larger spacing produces wider rooms. Adjust these values to match your real-world scale.
+            </p>
+            <p id="scaleHelp" class="helper-text">
+              Example: set the label to feet or metres and choose how many units each square equals.
+            </p>
           </section>
-
-          <section
-            id="panel-insert"
-            class="ribbon-panel"
-            role="tabpanel"
-            aria-labelledby="tab-insert"
-            data-tab="insert"
-            aria-hidden="true"
-          >
-            <div class="command-group">
-              <h2>Placement tools</h2>
-              <div class="tool-row">
-                <button type="button" class="tool-button is-active" data-tool="draw" aria-pressed="true">Draw walls</button>
-                <button type="button" class="tool-button" data-tool="window" aria-pressed="false">Insert window</button>
-                <button type="button" class="tool-button" data-tool="door" aria-pressed="false">Insert door</button>
-              </div>
-              <p class="helper-text">
-                Click a wall while a placement tool is active to drop a window or door. Press Escape to return to drawing.
-              </p>
-              <button id="clearOpeningsButton" type="button" class="secondary" disabled>Clear openings on wall</button>
-            </div>
+          <section aria-labelledby="exportHeading" class="setup-section">
+            <h2 id="exportHeading">Export</h2>
+            <label class="field field-stacked">
+              <span>Google Apps Script URL</span>
+              <input id="sheetsUrl" type="url" inputmode="url" placeholder="https://script.google.com/..." />
+            </label>
+            <p class="helper-text">
+              Paste the Apps Script web app URL that appends rows to your sheet, then send the current metrics.
+            </p>
+            <button id="sendSheetsButton" type="button" class="command-button command-button--secondary">
+              Send to Google Sheets
+            </button>
+            <p id="sheetsStatus" class="status-line" role="status" aria-live="polite"></p>
           </section>
         </div>
-
-        <p id="commandHint" class="command-hint helper-text" role="status" aria-live="polite"></p>
       </div>
+      <p id="commandHint" class="command-hint" role="status" aria-live="polite"></p>
     </header>
 
     <div class="app-layout">
@@ -130,11 +96,11 @@
           <strong>How to work</strong>
           <ol class="instructions-list">
             <li>Use <strong>Draw walls</strong> to drag horizontal or vertical walls on the grid.</li>
-            <li>Select the <strong>Insert</strong> tab and click walls to place windows or doors.</li>
-            <li>Undo removes the latest wall, <strong>Erase selected</strong> deletes a chosen wall, and <strong>Clear</strong> starts fresh.</li>
+            <li>Use <strong>Insert window</strong> or <strong>Insert door</strong> to add openings, then click a wall to place them.</li>
+            <li>Undo removes the latest wall, <strong>Erase selected</strong> deletes a chosen wall, <strong>Delete openings</strong> clears windows and doors on the selected wall, and <strong>Clear plan</strong> starts fresh.</li>
           </ol>
           <p class="helper-text">
-            Adjust grid spacing and units from the Home tab to match your project scale.
+            Adjust grid spacing and units from the Drawing setup panel to match your project scale.
           </p>
         </div>
 
@@ -145,10 +111,6 @@
       </aside>
 
       <main>
-        <div class="top-bar">
-          <span>Choose commands from the ribbon, then work directly on the grid.</span>
-          <span>Drag to draw walls; click a wall with Insert tools to add windows or doors.</span>
-        </div>
         <div class="canvas-wrapper">
           <canvas id="planCanvas" aria-label="Plan canvas"></canvas>
           <section class="metrics-overlay" aria-label="Live metrics" aria-live="polite">
@@ -175,6 +137,37 @@
           </section>
         </div>
       </main>
+    </div>
+
+    <div
+      id="openingPrompt"
+      class="opening-prompt"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="openingPromptTitle"
+      aria-describedby="openingPromptDescription"
+      hidden
+    >
+      <div class="opening-prompt__content">
+        <h2 id="openingPromptTitle">Opening dimensions</h2>
+        <p class="helper-text" id="openingPromptDescription"></p>
+        <form id="openingForm" class="opening-form">
+          <div class="field-grid">
+            <label class="field">
+              <span>Width</span>
+              <input id="openingWidth" name="openingWidth" type="number" min="0.1" step="0.01" required />
+            </label>
+            <label class="field">
+              <span>Height</span>
+              <input id="openingHeight" name="openingHeight" type="number" min="0.1" step="0.01" required />
+            </label>
+          </div>
+          <div class="opening-form__actions">
+            <button type="button" id="openingCancel" class="command-button command-button--ghost">Cancel</button>
+            <button type="submit" class="command-button">Use dimensions</button>
+          </div>
+        </form>
+      </div>
     </div>
 
     <script src="sheets-export.js"></script>
