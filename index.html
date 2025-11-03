@@ -1,1030 +1,114 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>House Plan Sketcher</title>
-  <style>
-    :root {
-      color-scheme: light;
-      --bg: #f3f4f6;
-      --panel: #ffffff;
-      --accent: #2563eb;
-      --ink: #111827;
-      --ink-soft: #4b5563;
-      --grid: #d1d5db;
-      --grid-bold: #9ca3af;
-      --wall: #111827;
-      --wall-active: #2563eb;
-      --wall-open: #dc2626;
-    }
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>House Plan Sketcher</title>
+    <link rel="stylesheet" href="assets/css/styles.css" />
+  </head>
+  <body>
+    <aside>
+      <header>
+        <h1>House Plan Sketcher</h1>
+        <p>
+          Create clean 2D floor plans with simple drag lines. Everything snaps to the grid and stays
+          perfectly horizontal or vertical.
+        </p>
+      </header>
 
-    * {
-      box-sizing: border-box;
-      font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
-    }
-
-    body {
-      margin: 0;
-      min-height: 100vh;
-      background: var(--bg);
-      display: grid;
-      grid-template-columns: minmax(260px, 320px) 1fr;
-    }
-
-    aside {
-      background: var(--panel);
-      padding: 24px;
-      border-right: 1px solid #e5e7eb;
-      display: grid;
-      grid-template-rows: auto auto 1fr auto;
-      gap: 24px;
-    }
-
-    h1 {
-      margin: 0 0 8px;
-      font-size: 1.5rem;
-      color: var(--ink);
-    }
-
-    p,
-    label,
-    button,
-    input {
-      color: var(--ink-soft);
-      font-size: 0.95rem;
-    }
-
-    .card {
-      border: 1px solid #e5e7eb;
-      border-radius: 16px;
-      padding: 16px;
-      background: #f9fafb;
-      display: grid;
-      gap: 12px;
-    }
-
-    .card strong {
-      color: var(--ink);
-    }
-
-    .card label {
-      font-weight: 600;
-      color: var(--ink);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    }
-
-    input[type="number"],
-    input[type="text"] {
-      width: 100%;
-      padding: 10px 12px;
-      border-radius: 10px;
-      border: 1px solid #d1d5db;
-      background: #fff;
-      color: var(--ink);
-    }
-
-    input:focus {
-      border-color: var(--accent);
-      outline: 2px solid color-mix(in srgb, var(--accent) 30%, transparent);
-      outline-offset: 2px;
-    }
-
-    .button-row {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-      gap: 10px;
-    }
-
-    button {
-      padding: 12px 14px;
-      border-radius: 12px;
-      border: none;
-      background: var(--accent);
-      color: white;
-      font-weight: 600;
-      cursor: pointer;
-      transition: transform 0.15s ease, box-shadow 0.15s ease;
-    }
-
-    button.secondary {
-      background: #e5e7eb;
-      color: var(--ink);
-    }
-
-    button:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 6px 18px rgba(37, 99, 235, 0.18);
-    }
-
-    main {
-      position: relative;
-      display: grid;
-      grid-template-rows: auto 1fr auto;
-    }
-
-    .top-bar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      padding: 16px 24px;
-      background: rgba(255, 255, 255, 0.85);
-      border-bottom: 1px solid #e5e7eb;
-      backdrop-filter: blur(12px);
-      font-size: 0.9rem;
-      color: var(--ink-soft);
-    }
-
-    .canvas-wrapper {
-      position: relative;
-      overflow: hidden;
-      background: #fff;
-      min-height: 420px;
-    }
-
-    canvas {
-      width: 100%;
-      height: 100%;
-      display: block;
-      touch-action: none;
-      cursor: crosshair;
-    }
-
-    .footer {
-      padding: 16px 24px;
-      background: rgba(255, 255, 255, 0.85);
-      border-top: 1px solid #e5e7eb;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 16px;
-      justify-content: space-between;
-    }
-
-    .metrics {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 12px;
-    }
-
-    .metric {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      font-size: 0.85rem;
-      color: var(--ink-soft);
-    }
-
-    .metric span {
-      font-size: 1.1rem;
-      font-weight: 600;
-      color: var(--ink);
-    }
-
-    .status-line {
-      font-size: 0.85rem;
-      color: var(--ink-soft);
-      min-height: 1.2em;
-    }
-
-    .status-line.status-pending {
-      color: var(--accent);
-    }
-
-    .status-line.status-success {
-      color: #047857;
-    }
-
-    .status-line.status-error {
-      color: #dc2626;
-    }
-
-    @media (max-width: 880px) {
-      body {
-        grid-template-columns: 1fr;
-      }
-
-      aside {
-        border-right: none;
-        border-bottom: 1px solid #e5e7eb;
-      }
-
-      main {
-        min-height: 60vh;
-      }
-    }
-  </style>
-</head>
-<body>
-  <aside>
-    <header>
-      <h1>House Plan Sketcher</h1>
-      <p>Create clean 2D floor plans with simple drag lines. Everything snaps to the grid and stays perfectly horizontal or vertical.</p>
-    </header>
-
-    <div class="card" aria-label="Drawing instructions">
-      <strong>How to draw</strong>
-      <ol style="margin:0; padding-left: 1.1rem; display:grid; gap:6px; color: var(--ink-soft);">
-        <li>Click or tap on the grid to choose a starting point.</li>
-        <li>Drag horizontally or vertically to set the wall length.</li>
-        <li>Release to place the wall. Repeat to build your plan.</li>
-        <li>Click any wall to select it, then choose <strong>Erase selected</strong> to remove it.</li>
-      </ol>
-      <p style="margin:0; color: var(--ink-soft);">Need to tweak something? Use <strong>Undo</strong> to remove the last wall, <strong>Erase selected</strong> to delete a picked wall, or <strong>Clear</strong> to start fresh.</p>
-    </div>
-
-    <div class="card" aria-label="Options">
-      <label>Grid spacing
-        <input id="gridSize" type="number" min="10" step="5" value="30" aria-describedby="gridHelp" />
-      </label>
-      <span id="gridHelp" style="font-size:0.85rem; color:var(--ink-soft);">Pixels between grid lines. Larger numbers = bigger rooms.</span>
-
-      <label>Real-world scale
-        <input id="unitLabel" type="text" value="m" aria-describedby="scaleHelp" />
-      </label>
-      <label>Units per grid square
-        <input id="unitPerCell" type="number" min="1" step="1" value="1" />
-      </label>
-      <span id="scaleHelp" style="font-size:0.85rem; color:var(--ink-soft);">Example: 1 square = 1 m.</span>
-
-      <div class="button-row">
-        <button id="undoButton" class="secondary" type="button">Undo</button>
-        <button id="eraseButton" class="secondary" type="button" disabled>Erase selected</button>
-        <button id="clearButton" class="secondary" type="button">Clear</button>
+      <div class="card" aria-label="Drawing instructions">
+        <strong>How to draw</strong>
+        <ol class="instructions-list">
+          <li>Click or tap on the grid to choose a starting point.</li>
+          <li>Drag horizontally or vertically to set the wall length.</li>
+          <li>Release to place the wall. Repeat to build your plan.</li>
+          <li>Click any wall to select it, then choose <strong>Erase selected</strong> to remove it.</li>
+        </ol>
+        <p class="helper-text">
+          Need to tweak something? Use <strong>Undo</strong> to remove the last wall, <strong>Erase selected</strong>
+          to delete a picked wall, or <strong>Clear</strong> to start fresh.
+        </p>
       </div>
-      <button id="downloadButton" type="button">Download PNG</button>
-    </div>
 
-    <div class="card" aria-label="Google Sheets export">
-      <strong>Send metrics to Google Sheets</strong>
-      <label style="flex-direction: column; align-items: stretch; gap: 6px;">
-        Web app URL
-        <input id="sheetsUrl" type="url" inputmode="url" placeholder="https://script.google.com/..." />
-      </label>
-      <p style="margin:0; font-size:0.85rem; color:var(--ink-soft);">
-        Paste the URL of a Google Apps Script web app that appends rows to your sheet.
-      </p>
-      <button id="sendSheetsButton" type="button" class="secondary">Send to Google Sheets</button>
-      <p id="sheetsStatus" class="status-line" role="status" aria-live="polite"></p>
-    </div>
+      <div class="card" aria-label="Options">
+        <label>
+          Grid spacing
+          <input id="gridSize" type="number" min="10" step="5" value="30" aria-describedby="gridHelp" />
+        </label>
+        <span id="gridHelp" class="helper-text">Pixels between grid lines. Larger numbers = bigger rooms.</span>
 
-    <footer style="align-self:end; font-size:0.85rem; color:var(--ink-soft); line-height:1.4;">
-      <strong style="display:block; color:var(--ink);">Tip</strong>
-      Draw walls in the order you would walk around the building. This makes it easier to see the total length and check that the shape closes neatly.
-    </footer>
-  </aside>
+        <label>
+          Real-world scale
+          <input id="unitLabel" type="text" value="m" aria-describedby="scaleHelp" />
+        </label>
+        <label>
+          Units per grid square
+          <input id="unitPerCell" type="number" min="1" step="1" value="1" />
+        </label>
+        <span id="scaleHelp" class="helper-text">Example: 1 square = 1 m.</span>
 
-  <main>
-    <div class="top-bar">
-      <span>Click and drag inside the grid to place walls.</span>
-      <span>Walls snap to the nearest square for crisp 90° corners.</span>
-    </div>
-    <div class="canvas-wrapper">
-      <canvas id="planCanvas" aria-label="Plan canvas"></canvas>
-    </div>
-    <div class="footer">
-      <div class="metrics">
-        <div class="metric">
-          Walls drawn
-          <span id="wallCount">0</span>
+        <div class="button-row">
+          <button id="undoButton" class="secondary" type="button">Undo</button>
+          <button id="eraseButton" class="secondary" type="button" disabled>Erase selected</button>
+          <button id="clearButton" class="secondary" type="button">Clear</button>
         </div>
-        <div class="metric">
-          Total length
-          <span id="totalLength">0</span>
+        <button id="downloadButton" type="button">Download PNG</button>
+      </div>
+
+      <div class="card" aria-label="Google Sheets export">
+        <strong>Send metrics to Google Sheets</strong>
+        <label class="label-stacked">
+          Web app URL
+          <input id="sheetsUrl" type="url" inputmode="url" placeholder="https://script.google.com/..." />
+        </label>
+        <p class="helper-text">
+          Paste the URL of a Google Apps Script web app that appends rows to your sheet.
+        </p>
+        <button id="sendSheetsButton" type="button" class="secondary">Send to Google Sheets</button>
+        <p id="sheetsStatus" class="status-line" role="status" aria-live="polite"></p>
+      </div>
+
+      <footer class="tip-footer">
+        <strong>Tip</strong>
+        Draw walls in the order you would walk around the building. This makes it easier to see the total
+        length and check that the shape closes neatly.
+      </footer>
+    </aside>
+
+    <main>
+      <div class="top-bar">
+        <span>Click and drag inside the grid to place walls.</span>
+        <span>Walls snap to the nearest square for crisp 90° corners.</span>
+      </div>
+      <div class="canvas-wrapper">
+        <canvas id="planCanvas" aria-label="Plan canvas"></canvas>
+      </div>
+      <div class="footer">
+        <div class="metrics">
+          <div class="metric">
+            Walls drawn
+            <span id="wallCount">0</span>
+          </div>
+          <div class="metric">
+            Total length
+            <span id="totalLength">0</span>
+          </div>
+          <div class="metric">
+            Enclosed area
+            <span id="enclosedArea">0</span>
+          </div>
+          <div class="metric">
+            Last wall
+            <span id="lastWall">–</span>
+          </div>
         </div>
-        <div class="metric">
-          Enclosed area
-          <span id="enclosedArea">0</span>
-        </div>
-        <div class="metric">
-          Last wall
-          <span id="lastWall">–</span>
+        <div class="helper-text">
+          Measurements update automatically as you draw.
         </div>
       </div>
-      <div style="font-size:0.85rem; color:var(--ink-soft);">
-        Measurements update automatically as you draw.
-      </div>
-    </div>
-  </main>
-
-  <script src="sheets-export.js"></script>
-  <script>
-    const canvas = document.getElementById('planCanvas');
-    const ctx = canvas.getContext('2d');
-    const wallCountEl = document.getElementById('wallCount');
-    const totalLengthEl = document.getElementById('totalLength');
-    const lastWallEl = document.getElementById('lastWall');
-    const areaEl = document.getElementById('enclosedArea');
-    const eraseButton = document.getElementById('eraseButton');
-    const sheetsUrlInput = document.getElementById('sheetsUrl');
-    const sheetsStatusEl = document.getElementById('sheetsStatus');
-    const sendSheetsButton = document.getElementById('sendSheetsButton');
-
-    const state = {
-      gridSize: 30,
-      walls: [],
-      isDrawing: false,
-      preview: null,
-      unitLabel: 'm',
-      unitPerCell: 1,
-      selectedWallIndex: null,
-      openWallIndexes: new Set(),
-      openEndpoints: [],
-      latestMetrics: null,
-    };
-
-    const dpr = window.devicePixelRatio || 1;
-
-    const pointerSession = {
-      active: false,
-      pointerId: null,
-      startCell: null,
-      moved: false,
-    };
-
-    let sheetsExporter = null;
-
-    function resizeCanvas() {
-      const wrapper = canvas.parentElement;
-      const rect = wrapper.getBoundingClientRect();
-
-      let displayWidth = rect.width;
-      if (!displayWidth || displayWidth < 1) {
-        displayWidth = wrapper.clientWidth || canvas.clientWidth || window.innerWidth || 800;
-      }
-
-      let displayHeight = rect.height;
-      if (!displayHeight || displayHeight < 1) {
-        displayHeight = wrapper.clientHeight;
-
-        if (!displayHeight || displayHeight < 1) {
-          const mainEl = wrapper.closest('main');
-          if (mainEl) {
-            const mainRect = mainEl.getBoundingClientRect();
-            if (mainRect.height) {
-              const topBar = mainEl.querySelector('.top-bar');
-              const footer = mainEl.querySelector('.footer');
-              let available = mainRect.height;
-              if (topBar) available -= topBar.getBoundingClientRect().height;
-              if (footer) available -= footer.getBoundingClientRect().height;
-              if (available > 0) displayHeight = available;
-            }
-          }
-        }
-
-        if (!displayHeight || displayHeight < 1) {
-          displayHeight = Math.max(window.innerHeight - 200, 320);
-        }
-
-        wrapper.style.minHeight = `${Math.max(displayHeight, 320)}px`;
-      }
-
-      canvas.width = displayWidth * dpr;
-      canvas.height = displayHeight * dpr;
-      canvas.style.width = `${displayWidth}px`;
-      canvas.style.height = `${displayHeight}px`;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      draw();
-    }
-
-    const colors = {
-      grid: '#d1d5db',
-      gridBold: '#9ca3af',
-      wall: '#111827',
-      wallActive: '#2563eb',
-      wallOpen: '#dc2626',
-      wallText: 'rgba(17,24,39,0.85)',
-    };
-
-    function drawGrid() {
-      const { gridSize } = state;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      ctx.save();
-      ctx.strokeStyle = colors.grid;
-      ctx.lineWidth = 1;
-
-      const width = canvas.width / dpr;
-      const height = canvas.height / dpr;
-
-      ctx.beginPath();
-      for (let x = 0; x <= width; x += gridSize) {
-        ctx.moveTo(x + 0.5, 0);
-        ctx.lineTo(x + 0.5, height);
-      }
-      for (let y = 0; y <= height; y += gridSize) {
-        ctx.moveTo(0, y + 0.5);
-        ctx.lineTo(width, y + 0.5);
-      }
-      ctx.stroke();
-
-      ctx.strokeStyle = colors.gridBold;
-      ctx.lineWidth = 1.25;
-      ctx.beginPath();
-      for (let x = 0; x <= width; x += gridSize * 5) {
-        ctx.moveTo(x + 0.5, 0);
-        ctx.lineTo(x + 0.5, height);
-      }
-      for (let y = 0; y <= height; y += gridSize * 5) {
-        ctx.moveTo(0, y + 0.5);
-        ctx.lineTo(width, y + 0.5);
-      }
-      ctx.stroke();
-      ctx.restore();
-    }
-
-    function cellFromEvent(evt) {
-      const rect = canvas.getBoundingClientRect();
-      const x = evt.clientX - rect.left;
-      const y = evt.clientY - rect.top;
-      return {
-        col: Math.round(x / state.gridSize),
-        row: Math.round(y / state.gridSize),
-      };
-    }
-
-    function pointFromEvent(evt) {
-      const rect = canvas.getBoundingClientRect();
-      return {
-        x: evt.clientX - rect.left,
-        y: evt.clientY - rect.top,
-      };
-    }
-
-    function wallToPixels(wall) {
-      return {
-        x1: wall.x1 * state.gridSize,
-        y1: wall.y1 * state.gridSize,
-        x2: wall.x2 * state.gridSize,
-        y2: wall.y2 * state.gridSize,
-      };
-    }
-
-    function findWallIndexNearPoint(point, tolerance = 10) {
-      for (let i = state.walls.length - 1; i >= 0; i -= 1) {
-        const px = wallToPixels(state.walls[i]);
-        const minX = Math.min(px.x1, px.x2) - tolerance;
-        const maxX = Math.max(px.x1, px.x2) + tolerance;
-        const minY = Math.min(px.y1, px.y2) - tolerance;
-        const maxY = Math.max(px.y1, px.y2) + tolerance;
-        if (point.x < minX || point.x > maxX || point.y < minY || point.y > maxY) continue;
-
-        if (px.y1 === px.y2) {
-          if (Math.abs(point.y - px.y1) <= tolerance) {
-            return i;
-          }
-        } else if (px.x1 === px.x2) {
-          if (Math.abs(point.x - px.x1) <= tolerance) {
-            return i;
-          }
-        }
-      }
-      return null;
-    }
-
-    function selectWallAtPoint(point) {
-      const index = findWallIndexNearPoint(point);
-      state.selectedWallIndex = index;
-      updateEraseButton();
-      return index !== null;
-    }
-
-    function drawWalls() {
-      ctx.save();
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-
-      state.walls.forEach((wall, index) => {
-        const px = wallToPixels(wall);
-        const isOpen = state.openWallIndexes.has(index);
-        const isSelected = index === state.selectedWallIndex;
-
-        ctx.strokeStyle = isOpen ? colors.wallOpen : isSelected ? colors.wallActive : colors.wall;
-        ctx.lineWidth = isSelected ? 8 : 6;
-        ctx.beginPath();
-        ctx.moveTo(px.x1, px.y1);
-        ctx.lineTo(px.x2, px.y2);
-        ctx.stroke();
-
-        const measurementColor = isOpen ? colors.wallOpen : isSelected ? colors.wallActive : undefined;
-        drawMeasurement(px, { color: measurementColor });
-      });
-
-      if (state.preview) {
-        const px = wallToPixels(state.preview);
-        ctx.save();
-        ctx.strokeStyle = colors.wallActive;
-        ctx.lineWidth = 6;
-        ctx.setLineDash([12, 8]);
-        ctx.beginPath();
-        ctx.moveTo(px.x1, px.y1);
-        ctx.lineTo(px.x2, px.y2);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        drawMeasurement(px, { isPreview: true });
-        ctx.restore();
-      }
-
-      ctx.restore();
-      drawOpenEndpoints();
-    }
-
-    function drawMeasurement(pxWall, options = {}) {
-      const { isPreview = false, color } = options;
-      const dx = pxWall.x2 - pxWall.x1;
-      const dy = pxWall.y2 - pxWall.y1;
-      const lengthCells = Math.round((Math.abs(dx) + Math.abs(dy)) / state.gridSize);
-      if (lengthCells === 0) return;
-      const lengthRealRaw = lengthCells * state.unitPerCell;
-      const lengthReal = Number.isInteger(lengthRealRaw) ? lengthRealRaw : Number(lengthRealRaw.toFixed(2));
-
-      const cx = (pxWall.x1 + pxWall.x2) / 2;
-      const cy = (pxWall.y1 + pxWall.y2) / 2;
-
-      ctx.save();
-      ctx.fillStyle = color || (isPreview ? colors.wallActive : colors.wallText);
-      ctx.font = '600 14px "Inter", sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      const label = `${lengthReal} ${state.unitLabel}`;
-      ctx.fillText(label, cx, cy - 12);
-      ctx.restore();
-    }
-
-    function drawOpenEndpoints() {
-      if (!state.openEndpoints.length) return;
-      ctx.save();
-      ctx.fillStyle = colors.wallOpen;
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 2;
-
-      for (const point of state.openEndpoints) {
-        const px = {
-          x: point.x * state.gridSize,
-          y: point.y * state.gridSize,
-        };
-        ctx.beginPath();
-        ctx.arc(px.x, px.y, 5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-      }
-
-      ctx.restore();
-    }
-
-    function draw() {
-      drawGrid();
-      drawWalls();
-    }
-
-    function isPointOnWall(point, wall) {
-      const { x, y } = point;
-      if (wall.x1 === wall.x2 && wall.y1 === wall.y2) {
-        return wall.x1 === x && wall.y1 === y;
-      }
-      if (wall.y1 === wall.y2) {
-        if (y !== wall.y1) return false;
-        const minX = Math.min(wall.x1, wall.x2);
-        const maxX = Math.max(wall.x1, wall.x2);
-        return x >= minX && x <= maxX;
-      }
-      if (wall.x1 === wall.x2) {
-        if (x !== wall.x1) return false;
-        const minY = Math.min(wall.y1, wall.y2);
-        const maxY = Math.max(wall.y1, wall.y2);
-        return y >= minY && y <= maxY;
-      }
-      return false;
-    }
-
-    function computeMetricsSnapshot() {
-      const wallCount = state.walls.length;
-      const totalLengthCells = state.walls.reduce((sum, w) => {
-        return sum + Math.abs(w.x2 - w.x1) + Math.abs(w.y2 - w.y1);
-      }, 0);
-      const totalLengthValue = totalLengthCells * state.unitPerCell;
-      const totalLengthDisplay = Number.isInteger(totalLengthValue)
-        ? totalLengthValue
-        : Number(totalLengthValue.toFixed(2));
-
-      const enclosedCells = computeEnclosedAreaCells();
-      const enclosedAreaValue = enclosedCells * state.unitPerCell * state.unitPerCell;
-      const enclosedAreaDisplay = Number.isInteger(enclosedAreaValue)
-        ? enclosedAreaValue
-        : Number(enclosedAreaValue.toFixed(2));
-
-      const unitLabel = state.unitLabel || 'units';
-
-      const lastWall = state.walls[wallCount - 1];
-      let lastWallLengthValue = null;
-      let lastWallLengthDisplay = null;
-      if (lastWall) {
-        const cells = Math.abs(lastWall.x2 - lastWall.x1) + Math.abs(lastWall.y2 - lastWall.y1);
-        lastWallLengthValue = cells * state.unitPerCell;
-        lastWallLengthDisplay = Number.isInteger(lastWallLengthValue)
-          ? lastWallLengthValue
-          : Number(lastWallLengthValue.toFixed(2));
-      }
-
-      return {
-        wallCount,
-        totalLengthCells,
-        totalLengthValue,
-        totalLengthDisplay,
-        enclosedCells,
-        enclosedAreaValue,
-        enclosedAreaDisplay,
-        unitLabel,
-        lastWallLengthValue,
-        lastWallLengthDisplay,
-        gridSpacing: state.gridSize,
-        unitPerCell: state.unitPerCell,
-      };
-    }
-
-    function updateMetrics() {
-      const metrics = computeMetricsSnapshot();
-      state.latestMetrics = metrics;
-
-      wallCountEl.textContent = metrics.wallCount.toString();
-      totalLengthEl.textContent = `${metrics.totalLengthDisplay} ${metrics.unitLabel}`;
-      areaEl.textContent = `${metrics.enclosedAreaDisplay} ${metrics.unitLabel}²`;
-
-      if (metrics.lastWallLengthDisplay == null) {
-        lastWallEl.textContent = '–';
-      } else {
-        lastWallEl.textContent = `${metrics.lastWallLengthDisplay} ${metrics.unitLabel}`;
-      }
-
-      if (sheetsExporter && typeof sheetsExporter.setLatestMetrics === 'function') {
-        sheetsExporter.setLatestMetrics(metrics);
-      }
-    }
-
-    function computeConnectivity() {
-      if (state.walls.length === 0) {
-        state.openWallIndexes = new Set();
-        state.openEndpoints = [];
-        return;
-      }
-
-      const endpointMap = new Map();
-      state.walls.forEach((wall, index) => {
-        const startKey = `${wall.x1},${wall.y1}`;
-        const endKey = `${wall.x2},${wall.y2}`;
-
-        if (!endpointMap.has(startKey)) endpointMap.set(startKey, []);
-        endpointMap.get(startKey).push({ index, point: { x: wall.x1, y: wall.y1 } });
-
-        if (!endpointMap.has(endKey)) endpointMap.set(endKey, []);
-        endpointMap.get(endKey).push({ index, point: { x: wall.x2, y: wall.y2 } });
-      });
-
-      endpointMap.forEach((entries, key) => {
-        const [xStr, yStr] = key.split(',');
-        const point = { x: Number(xStr), y: Number(yStr) };
-        state.walls.forEach((wall, wallIndex) => {
-          if (entries.some((entry) => entry.index === wallIndex)) return;
-          if (isPointOnWall(point, wall)) {
-            entries.push({ index: wallIndex, point });
-          }
-        });
-      });
-
-      const openSet = new Set();
-      const openPoints = [];
-
-      endpointMap.forEach((entries) => {
-        if (entries.length <= 1) {
-          entries.forEach((entry) => {
-            openSet.add(entry.index);
-            openPoints.push(entry.point);
-          });
-        }
-      });
-
-      state.openWallIndexes = openSet;
-      state.openEndpoints = openPoints;
-    }
-
-    function computeEnclosedAreaCells() {
-      if (state.walls.length === 0) {
-        return 0;
-      }
-
-      const xs = state.walls.flatMap((wall) => [wall.x1, wall.x2]);
-      const ys = state.walls.flatMap((wall) => [wall.y1, wall.y2]);
-      const minX = Math.min(...xs);
-      const maxX = Math.max(...xs);
-      const minY = Math.min(...ys);
-      const maxY = Math.max(...ys);
-
-      const minXExpanded = minX - 1;
-      const maxXExpanded = maxX + 1;
-      const minYExpanded = minY - 1;
-      const maxYExpanded = maxY + 1;
-
-      const horizontalSegments = new Set();
-      const verticalSegments = new Set();
-
-      state.walls.forEach((wall) => {
-        if (wall.y1 === wall.y2) {
-          const y = wall.y1;
-          const start = Math.min(wall.x1, wall.x2);
-          const end = Math.max(wall.x1, wall.x2);
-          for (let x = start; x < end; x += 1) {
-            horizontalSegments.add(`${x},${y}`);
-          }
-        } else if (wall.x1 === wall.x2) {
-          const x = wall.x1;
-          const start = Math.min(wall.y1, wall.y2);
-          const end = Math.max(wall.y1, wall.y2);
-          for (let y = start; y < end; y += 1) {
-            verticalSegments.add(`${x},${y}`);
-          }
-        }
-      });
-
-      const width = maxXExpanded - minXExpanded;
-      const height = maxYExpanded - minYExpanded;
-      const visited = Array.from({ length: height }, () => Array(width).fill(false));
-      const queue = [];
-
-      const enqueue = (cx, cy) => {
-        const ix = cx - minXExpanded;
-        const iy = cy - minYExpanded;
-        if (ix < 0 || ix >= width || iy < 0 || iy >= height) return;
-        if (visited[iy][ix]) return;
-        visited[iy][ix] = true;
-        queue.push({ cx, cy });
-      };
-
-      enqueue(minXExpanded, minYExpanded);
-
-      for (let i = 0; i < queue.length; i += 1) {
-        const { cx, cy } = queue[i];
-
-        if (!verticalSegments.has(`${cx + 1},${cy}`)) enqueue(cx + 1, cy);
-        if (!verticalSegments.has(`${cx},${cy}`)) enqueue(cx - 1, cy);
-        if (!horizontalSegments.has(`${cx},${cy + 1}`)) enqueue(cx, cy + 1);
-        if (!horizontalSegments.has(`${cx},${cy}`)) enqueue(cx, cy - 1);
-      }
-
-      let enclosedCells = 0;
-      for (let y = 0; y < height; y += 1) {
-        for (let x = 0; x < width; x += 1) {
-          if (!visited[y][x]) enclosedCells += 1;
-        }
-      }
-
-      return enclosedCells;
-    }
-
-    function updateEraseButton() {
-      eraseButton.disabled = state.selectedWallIndex == null;
-    }
-
-    function eraseSelected() {
-      if (state.selectedWallIndex == null) return;
-      state.walls.splice(state.selectedWallIndex, 1);
-      state.selectedWallIndex = null;
-      computeConnectivity();
-      updateEraseButton();
-      updateMetrics();
-      draw();
-    }
-
-    function handlePointerDown(evt) {
-      evt.preventDefault();
-      if (pointerSession.active) return;
-      const cell = cellFromEvent(evt);
-      pointerSession.active = true;
-      pointerSession.pointerId = evt.pointerId;
-      pointerSession.startCell = cell;
-      pointerSession.moved = false;
-      state.isDrawing = false;
-      state.preview = null;
-
-      if (typeof canvas.setPointerCapture === 'function') {
-        canvas.setPointerCapture(evt.pointerId);
-      }
-    }
-
-    function handlePointerMove(evt) {
-      if (!pointerSession.active || evt.pointerId !== pointerSession.pointerId) return;
-      evt.preventDefault();
-      const currentCell = cellFromEvent(evt);
-      const dx = currentCell.col - pointerSession.startCell.col;
-      const dy = currentCell.row - pointerSession.startCell.row;
-
-      if (!state.isDrawing) {
-        if (dx === 0 && dy === 0) {
-          draw();
-          return;
-        }
-        state.isDrawing = true;
-      }
-
-      pointerSession.moved = true;
-
-      let endCell = { ...pointerSession.startCell };
-      if (Math.abs(dx) >= Math.abs(dy)) {
-        endCell.col += dx;
-      } else {
-        endCell.row += dy;
-      }
-
-      if (endCell.col === pointerSession.startCell.col && endCell.row === pointerSession.startCell.row) {
-        state.preview = null;
-      } else {
-        state.preview = {
-          x1: pointerSession.startCell.col,
-          y1: pointerSession.startCell.row,
-          x2: endCell.col,
-          y2: endCell.row,
-        };
-      }
-      draw();
-    }
-
-    function handlePointerUp(evt) {
-      if (!pointerSession.active || evt.pointerId !== pointerSession.pointerId) return;
-      evt.preventDefault();
-
-      if (state.isDrawing && state.preview) {
-        state.walls.push(state.preview);
-        state.preview = null;
-        state.selectedWallIndex = null;
-        computeConnectivity();
-        updateEraseButton();
-        updateMetrics();
-        draw();
-      } else if (!state.isDrawing && !pointerSession.moved) {
-        const point = pointFromEvent(evt);
-        selectWallAtPoint(point);
-        draw();
-      } else if (state.isDrawing && !state.preview) {
-        draw();
-      }
-
-      releasePointer(evt.pointerId);
-      resetPointerSession();
-    }
-
-    function handlePointerCancel(evt) {
-      if (!pointerSession.active || (evt.pointerId != null && evt.pointerId !== pointerSession.pointerId)) {
-        return;
-      }
-
-      if (state.isDrawing) {
-        state.preview = null;
-        draw();
-      }
-
-      if (evt.pointerId != null) {
-        releasePointer(evt.pointerId);
-      } else if (pointerSession.pointerId != null) {
-        releasePointer(pointerSession.pointerId);
-      }
-
-      resetPointerSession();
-    }
-
-    function releasePointer(id) {
-      if (
-        typeof canvas.hasPointerCapture === 'function' &&
-        id != null &&
-        canvas.hasPointerCapture(id)
-      ) {
-        canvas.releasePointerCapture(id);
-      }
-    }
-
-    function resetPointerSession() {
-      pointerSession.active = false;
-      pointerSession.pointerId = null;
-      pointerSession.startCell = null;
-      pointerSession.moved = false;
-      state.isDrawing = false;
-      state.preview = null;
-    }
-
-    function undoLast() {
-      if (state.walls.length === 0) return;
-      state.walls.pop();
-      if (state.selectedWallIndex != null && state.selectedWallIndex >= state.walls.length) {
-        state.selectedWallIndex = null;
-      }
-      computeConnectivity();
-      updateEraseButton();
-      updateMetrics();
-      draw();
-    }
-
-    function clearAll() {
-      if (state.walls.length === 0) return;
-      state.walls = [];
-      state.selectedWallIndex = null;
-      computeConnectivity();
-      updateEraseButton();
-      updateMetrics();
-      draw();
-    }
-
-    function downloadPNG() {
-      const link = document.createElement('a');
-      link.download = 'house-plan.png';
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-    }
-
-    if (
-      typeof window.setupSheetsExport === 'function' &&
-      sheetsUrlInput &&
-      sendSheetsButton &&
-      sheetsStatusEl
-    ) {
-      sheetsExporter = window.setupSheetsExport({
-        urlInput: sheetsUrlInput,
-        triggerButton: sendSheetsButton,
-        statusElement: sheetsStatusEl,
-        getMetrics: () => {
-          const metrics = state.latestMetrics ?? computeMetricsSnapshot();
-          return {
-            timestamp: new Date().toISOString(),
-            metrics: {
-              area: metrics.enclosedAreaValue,
-              areaLabel: `${metrics.enclosedAreaDisplay} ${metrics.unitLabel}²`,
-              areaCells: metrics.enclosedCells,
-              wallCount: metrics.wallCount,
-              totalWallLength: metrics.totalLengthValue,
-              totalWallLengthLabel: `${metrics.totalLengthDisplay} ${metrics.unitLabel}`,
-              totalWallLengthCells: metrics.totalLengthCells,
-              lastWallLength: metrics.lastWallLengthValue,
-              lastWallLengthLabel:
-                metrics.lastWallLengthDisplay == null
-                  ? null
-                  : `${metrics.lastWallLengthDisplay} ${metrics.unitLabel}`,
-              unitLabel: metrics.unitLabel,
-              unitsPerSquare: metrics.unitPerCell,
-              gridSpacing: metrics.gridSpacing,
-            },
-          };
-        },
-      });
-    }
-
-    canvas.addEventListener('pointerdown', handlePointerDown);
-    canvas.addEventListener('pointermove', handlePointerMove);
-    canvas.addEventListener('pointerup', handlePointerUp);
-    canvas.addEventListener('pointercancel', handlePointerCancel);
-    canvas.addEventListener('pointerleave', handlePointerCancel);
-
-    document.getElementById('gridSize').addEventListener('input', (evt) => {
-      const value = Number(evt.target.value);
-      if (!Number.isFinite(value) || value <= 0) return;
-      state.gridSize = value;
-      draw();
-    });
-
-    document.getElementById('unitLabel').addEventListener('input', (evt) => {
-      state.unitLabel = evt.target.value.trim() || 'units';
-      updateMetrics();
-      draw();
-    });
-
-    document.getElementById('unitPerCell').addEventListener('input', (evt) => {
-      const value = Number(evt.target.value);
-      if (!Number.isFinite(value) || value <= 0) return;
-      state.unitPerCell = value;
-      updateMetrics();
-      draw();
-    });
-
-    document.getElementById('undoButton').addEventListener('click', () => {
-      if (state.walls.length === 0) return;
-      undoLast();
-    });
-
-    document.getElementById('clearButton').addEventListener('click', () => {
-      if (state.walls.length === 0) return;
-      clearAll();
-    });
-
-    eraseButton.addEventListener('click', eraseSelected);
-
-    document.getElementById('downloadButton').addEventListener('click', downloadPNG);
-
-    window.addEventListener('resize', resizeCanvas);
-
-    resizeCanvas();
-    updateMetrics();
-    computeConnectivity();
-    updateEraseButton();
-  </script>
-</body>
+    </main>
+
+    <script src="sheets-export.js"></script>
+    <script type="module" src="assets/js/main.js"></script>
+  </body>
 </html>
