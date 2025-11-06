@@ -31,9 +31,22 @@ export function createWallActions({
     onWallsChanged();
   }
 
+  function clearOpenings() {
+    const index = state.selectedWallIndex;
+    if (index == null) return false;
+    const wall = state.walls[index];
+    if (!wall || !Array.isArray(wall.features) || wall.features.length === 0) {
+      return false;
+    }
+    wall.features = [];
+    onWallsChanged();
+    return true;
+  }
+
   return {
     undoLast,
     clearAll,
     eraseSelected,
+    clearOpenings,
   };
 }

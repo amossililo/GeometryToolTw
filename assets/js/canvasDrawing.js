@@ -164,6 +164,37 @@ export function createCanvasDrawing(canvas) {
       ctx.lineTo(px.x2, px.y2);
       ctx.stroke();
 
+      const features = Array.isArray(wall.features) ? wall.features : [];
+      if (features.length) {
+        const isHorizontal = px.y1 === px.y2;
+        const wallLengthPx = isHorizontal ? Math.abs(px.x2 - px.x1) : Math.abs(px.y2 - px.y1);
+        const startPx = isHorizontal ? Math.min(px.x1, px.x2) : Math.min(px.y1, px.y2);
+        features.forEach((feature) => {
+          if (!feature) return;
+          const featureLengthPx = Math.min((feature.lengthCells ?? 1) * state.gridSize, wallLengthPx);
+          if (!(featureLengthPx > 0)) return;
+          const center = startPx + wallLengthPx * (feature.position ?? 0.5);
+          const segmentStart = Math.max(startPx, center - featureLengthPx / 2);
+          const segmentEnd = Math.min(startPx + wallLengthPx, center + featureLengthPx / 2);
+          if (segmentEnd <= segmentStart) return;
+
+          ctx.save();
+          ctx.strokeStyle = feature.type === 'door' ? colors.door : colors.window;
+          ctx.lineWidth = isSelected ? 8 : 6;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          if (isHorizontal) {
+            ctx.moveTo(segmentStart, px.y1);
+            ctx.lineTo(segmentEnd, px.y1);
+          } else {
+            ctx.moveTo(px.x1, segmentStart);
+            ctx.lineTo(px.x1, segmentEnd);
+          }
+          ctx.stroke();
+          ctx.restore();
+        });
+      }
+
       const measurementColor = isOpen ? colors.wallOpen : isSelected ? colors.wallActive : undefined;
       drawMeasurement(px, { color: measurementColor });
     });

@@ -13,7 +13,16 @@
 
   class SheetsExporter {
     constructor(options) {
-      const { urlInput, triggerButton, statusElement, getMetrics } = options || {};
+      const {
+        urlInput,
+        triggerButton,
+        statusElement,
+        getMetrics,
+        defaultUrl,
+        onBeforeSend,
+        onAfterSend,
+        onSuccess,
+      } = options || {};
       this.urlInput = urlInput || null;
       this.triggerButton = triggerButton || null;
       this.statusElement = statusElement || null;
@@ -21,6 +30,10 @@
 
       this.latestMetrics = null;
       this.isSending = false;
+      this.defaultUrl = typeof defaultUrl === 'string' ? defaultUrl.trim() : '';
+      this.onBeforeSend = typeof onBeforeSend === 'function' ? onBeforeSend : null;
+      this.onAfterSend = typeof onAfterSend === 'function' ? onAfterSend : null;
+      this.onSuccess = typeof onSuccess === 'function' ? onSuccess : null;
 
       this.handleSend = this.handleSend.bind(this);
       this.handleUrlInput = this.handleUrlInput.bind(this);
@@ -46,6 +59,10 @@
       const saved = safeLocalStorage(() => window.localStorage.getItem(STORAGE_KEY));
       if (typeof saved === 'string' && saved.length > 0) {
         this.urlInput.value = saved;
+        return;
+      }
+      if (this.defaultUrl) {
+        this.urlInput.value = this.defaultUrl;
       }
     }
 
@@ -68,12 +85,20 @@
         this.triggerButton.disabled = true;
         return;
       }
-      const hasUrl = Boolean(this.urlInput && this.urlInput.value.trim().length > 0);
+      const hasUrl = this.getResolvedUrl().length > 0;
       this.triggerButton.disabled = !hasUrl;
     }
 
     setLatestMetrics(metrics) {
       this.latestMetrics = metrics;
+    }
+
+    getResolvedUrl() {
+      const inputValue = this.urlInput ? this.urlInput.value.trim() : '';
+      if (inputValue.length > 0) {
+        return inputValue;
+      }
+      return this.defaultUrl || '';
     }
 
     showStatus(message, state) {
@@ -90,7 +115,10 @@
         event.preventDefault();
       }
 
-      const url = this.urlInput ? this.urlInput.value.trim() : '';
+      const url = this.getResolvedUrl();
+      if (this.urlInput && !this.urlInput.value && url) {
+        this.urlInput.value = url;
+      }
       if (!url) {
         this.showStatus('Enter a Google Apps Script URL first.', 'error');
         this.updateButtonState();
@@ -107,6 +135,9 @@
         this.isSending = true;
         this.updateButtonState();
         this.showStatus('Sending data…', 'pending');
+        if (this.onBeforeSend) {
+          this.onBeforeSend();
+        }
 
         const response = await fetch(url, {
           method: 'POST',
@@ -135,13 +166,23 @@
         const successMessage =
           (responseJson && responseJson.message) || 'Metrics sent to Google Sheets.';
         this.showStatus(successMessage, 'success');
+        if (this.onSuccess) {
+          this.onSuccess({ responseJson, payload, url });
+        }
       } catch (error) {
         const message = error && error.message ? error.message : 'Unknown error while sending data.';
         this.showStatus(`Failed to send metrics: ${message}`, 'error');
       } finally {
         this.isSending = false;
         this.updateButtonState();
+        if (this.onAfterSend) {
+          this.onAfterSend();
+        }
       }
+    }
+
+    send() {
+      return this.handleSend();
     }
   }
 

@@ -1,9 +1,11 @@
 import { pointerSession, resetPointerSession, state } from './state.js';
+import { addOpeningToWall } from './openings.js';
 
 export function setupPointerHandlers(canvas, drawing, callbacks) {
   const {
     onWallsChanged = () => {},
     onSelectionChanged = () => {},
+    onToolFeedback = () => {},
   } = callbacks;
 
   function releasePointer(id) {
@@ -18,6 +20,65 @@ export function setupPointerHandlers(canvas, drawing, callbacks) {
 
   function handlePointerDown(evt) {
     evt.preventDefault();
+
+    if (state.activeTool !== 'draw') {
+      const point = drawing.pointFromEvent(evt);
+      const wallIndex = drawing.findWallIndexNearPoint(point);
+
+      if (wallIndex == null) {
+        onToolFeedback({ type: 'info', message: 'Click directly on a wall to place an opening.' });
+        return;
+      }
+
+      const preset = state.openingPresets ? state.openingPresets[state.activeTool] : null;
+      if (!preset || !Number.isFinite(preset.width) || !Number.isFinite(preset.height)) {
+        onToolFeedback({ type: 'error', message: 'Set valid dimensions before placing that opening.' });
+        return;
+      }
+
+      const wall = state.walls[wallIndex];
+      const px = drawing.wallToPixels(wall);
+      const isHorizontal = px.y1 === px.y2;
+      const wallLengthPx = isHorizontal ? Math.abs(px.x2 - px.x1) : Math.abs(px.y2 - px.y1);
+
+      if (!wallLengthPx) {
+        onToolFeedback({ type: 'error', message: 'That wall segment is too small for an opening.' });
+        return;
+      }
+
+      const startPx = isHorizontal ? Math.min(px.x1, px.x2) : Math.min(px.y1, px.y2);
+      const pointerCoord = isHorizontal ? point.x : point.y;
+      const position = (pointerCoord - startPx) / wallLengthPx;
+      const result = addOpeningToWall(wallIndex, {
+        type: state.activeTool,
+        position,
+        width: preset.width,
+        height: preset.height,
+      });
+
+      state.selectedWallIndex = wallIndex;
+      onSelectionChanged();
+
+      if (result.success) {
+        onWallsChanged();
+        drawing.draw();
+        onToolFeedback({
+          type: 'success',
+          message: state.activeTool === 'door' ? 'Door added to the selected wall.' : 'Window added to the selected wall.',
+        });
+      } else {
+        const message =
+          result.reason === 'too-short'
+            ? 'This wall is too short for that opening. Try a longer wall.'
+            : result.reason === 'missing-dimensions'
+            ? 'Opening dimensions are missing. Re-open the tool to set them.'
+            : 'Select a wall before placing an opening.';
+        onToolFeedback({ type: 'error', message });
+      }
+
+      return;
+    }
+
     if (pointerSession.active) return;
     const cell = drawing.cellFromEvent(evt);
     pointerSession.active = true;
@@ -75,7 +136,7 @@ export function setupPointerHandlers(canvas, drawing, callbacks) {
     evt.preventDefault();
 
     if (state.isDrawing && state.preview) {
-      state.walls.push(state.preview);
+      state.walls.push({ ...state.preview, features: [] });
       state.preview = null;
       state.selectedWallIndex = null;
       onWallsChanged();

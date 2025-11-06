@@ -1,14 +1,19 @@
 export const state = {
-  gridSize: 30,
+  gridSize: 15,
   walls: [],
   isDrawing: false,
   preview: null,
   unitLabel: 'm',
-  unitPerCell: 1,
+  unitPerCell: 0.5,
   selectedWallIndex: null,
   openWallIndexes: new Set(),
   openEndpoints: [],
   latestMetrics: null,
+  activeTool: 'draw',
+  openingPresets: {
+    window: { width: 1.5, height: 1.2 },
+    door: { width: 0.9, height: 2 },
+  },
 };
 
 export const pointerSession = {
@@ -25,6 +30,8 @@ export const colors = {
   wallActive: '#2563eb',
   wallOpen: '#dc2626',
   wallText: 'rgba(17,24,39,0.85)',
+  window: '#0ea5e9',
+  door: '#b45309',
 };
 
 export function resetPointerSession() {

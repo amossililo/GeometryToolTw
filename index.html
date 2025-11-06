@@ -7,106 +7,195 @@
     <link rel="stylesheet" href="assets/css/styles.css" />
   </head>
   <body>
-    <aside>
-      <header>
-        <h1>House Plan Sketcher</h1>
-        <p>
-          Create clean 2D floor plans with simple drag lines. Everything snaps to the grid and stays
-          perfectly horizontal or vertical.
-        </p>
-      </header>
-
-      <div class="card" aria-label="Drawing instructions">
-        <strong>How to draw</strong>
-        <ol class="instructions-list">
-          <li>Click or tap on the grid to choose a starting point.</li>
-          <li>Drag horizontally or vertically to set the wall length.</li>
-          <li>Release to place the wall. Repeat to build your plan.</li>
-          <li>Click any wall to select it, then choose <strong>Erase selected</strong> to remove it.</li>
-        </ol>
-        <p class="helper-text">
-          Need to tweak something? Use <strong>Undo</strong> to remove the last wall, <strong>Erase selected</strong>
-          to delete a picked wall, or <strong>Clear</strong> to start fresh.
-        </p>
+    <header class="command-bar" role="region" aria-label="Drawing commands">
+      <div class="command-bar-inner">
+        <button
+          id="setupToggle"
+          class="command-button command-button--ghost"
+          type="button"
+          aria-expanded="false"
+          aria-controls="setupPanel"
+        >
+          Drawing setup
+        </button>
+        <button
+          id="drawToolButton"
+          class="command-button is-active"
+          type="button"
+          data-tool="draw"
+          aria-pressed="true"
+        >
+          Draw walls
+        </button>
+        <button id="undoButton" class="command-button" type="button">Undo</button>
+        <button id="eraseButton" class="command-button" type="button" disabled>Erase selected</button>
+        <button id="clearButton" class="command-button" type="button">Clear plan</button>
+        <button id="downloadButton" class="command-button" type="button">Download PNG</button>
+        <button id="windowToolButton" class="command-button" type="button" data-tool="window" aria-pressed="false">
+          Insert window
+        </button>
+        <button id="doorToolButton" class="command-button" type="button" data-tool="door" aria-pressed="false">
+          Insert door
+        </button>
+        <button id="clearOpeningsButton" class="command-button" type="button" disabled>Delete openings</button>
+        <button id="generateBoqButton" class="command-button command-button--success command-button--boq" type="button">
+          Generate BOQ
+        </button>
       </div>
-
-      <div class="card" aria-label="Options">
-        <label>
-          Grid spacing
-          <input id="gridSize" type="number" min="10" step="5" value="30" aria-describedby="gridHelp" />
-        </label>
-        <span id="gridHelp" class="helper-text">Pixels between grid lines. Larger numbers = bigger rooms.</span>
-
-        <label>
-          Real-world scale
-          <input id="unitLabel" type="text" value="m" aria-describedby="scaleHelp" />
-        </label>
-        <label>
-          Units per grid square
-          <input id="unitPerCell" type="number" min="1" step="1" value="1" />
-        </label>
-        <span id="scaleHelp" class="helper-text">Example: 1 square = 1 m.</span>
-
-        <div class="button-row">
-          <button id="undoButton" class="secondary" type="button">Undo</button>
-          <button id="eraseButton" class="secondary" type="button" disabled>Erase selected</button>
-          <button id="clearButton" class="secondary" type="button">Clear</button>
-        </div>
-        <button id="downloadButton" type="button">Download PNG</button>
-      </div>
-
-      <div class="card" aria-label="Google Sheets export">
-        <strong>Send metrics to Google Sheets</strong>
-        <label class="label-stacked">
-          Web app URL
-          <input id="sheetsUrl" type="url" inputmode="url" placeholder="https://script.google.com/..." />
-        </label>
-        <p class="helper-text">
-          Paste the URL of a Google Apps Script web app that appends rows to your sheet.
-        </p>
-        <button id="sendSheetsButton" type="button" class="secondary">Send to Google Sheets</button>
-        <p id="sheetsStatus" class="status-line" role="status" aria-live="polite"></p>
-      </div>
-
-      <footer class="tip-footer">
-        <strong>Tip</strong>
-        Draw walls in the order you would walk around the building. This makes it easier to see the total
-        length and check that the shape closes neatly.
-      </footer>
-    </aside>
-
-    <main>
-      <div class="top-bar">
-        <span>Click and drag inside the grid to place walls.</span>
-        <span>Walls snap to the nearest square for crisp 90° corners.</span>
-      </div>
-      <div class="canvas-wrapper">
-        <canvas id="planCanvas" aria-label="Plan canvas"></canvas>
-      </div>
-      <div class="footer">
-        <div class="metrics">
-          <div class="metric">
-            Walls drawn
-            <span id="wallCount">0</span>
-          </div>
-          <div class="metric">
-            Total length
-            <span id="totalLength">0</span>
-          </div>
-          <div class="metric">
-            Enclosed area
-            <span id="enclosedArea">0</span>
-          </div>
-          <div class="metric">
-            Last wall
-            <span id="lastWall">–</span>
-          </div>
-        </div>
-        <div class="helper-text">
-          Measurements update automatically as you draw.
+      <div id="setupPanel" class="setup-panel" hidden tabindex="-1">
+        <div class="setup-grid">
+          <section aria-labelledby="setupHeading" class="setup-section">
+            <h2 id="setupHeading">Grid &amp; scale</h2>
+            <div class="field-grid">
+              <label class="field">
+                <span>Grid spacing</span>
+                <input id="gridSize" type="number" min="10" step="5" value="15" aria-describedby="gridHelp" />
+              </label>
+              <label class="field">
+                <span>Real-world scale label</span>
+                <input id="unitLabel" type="text" value="m" aria-describedby="scaleHelp" />
+              </label>
+              <label class="field">
+                <span>Units per grid square</span>
+                <input id="unitPerCell" type="number" min="0.1" step="0.1" value="0.5" />
+              </label>
+            </div>
+            <p id="gridHelp" class="helper-text">
+              Larger spacing produces wider rooms. Adjust these values to match your real-world scale.
+            </p>
+            <p id="scaleHelp" class="helper-text">
+              Example: set the label to feet or metres and choose how many units each square equals.
+            </p>
+          </section>
+          <section aria-labelledby="exportHeading" class="setup-section">
+            <h2 id="exportHeading">Export</h2>
+            <label class="field field-stacked">
+              <span>Google Apps Script URL</span>
+              <input id="sheetsUrl" type="url" inputmode="url" placeholder="https://script.google.com/..." />
+            </label>
+            <p class="helper-text">
+              A default Apps Script web app URL is prefilled for you. Replace it if you have your own deployment before
+              sending the current metrics.
+            </p>
+            <button id="sendSheetsButton" type="button" class="command-button command-button--secondary">
+              Send to Google Sheets
+            </button>
+            <p id="sheetsStatus" class="status-line" role="status" aria-live="polite"></p>
+          </section>
         </div>
       </div>
-    </main>
+      <p id="commandHint" class="command-hint" role="status" aria-live="polite"></p>
+    </header>
+
+    <div class="app-layout">
+      <aside>
+        <header>
+          <h1>House Plan Sketcher</h1>
+          <p>
+            Create clean 2D floor plans with simple drag lines. Snap to the grid for crisp 90° corners and add openings as you go.
+          </p>
+        </header>
+
+        <div class="card instructions-card" aria-label="Drawing instructions">
+          <strong>How to work</strong>
+          <ol class="instructions-list">
+            <li>Use <strong>Draw walls</strong> to drag horizontal or vertical walls on the grid.</li>
+            <li>Use <strong>Insert window</strong> or <strong>Insert door</strong> to add openings, then click a wall to place them.</li>
+            <li>Undo removes the latest wall, <strong>Erase selected</strong> deletes a chosen wall, <strong>Delete openings</strong> clears windows and doors on the selected wall, and <strong>Clear plan</strong> starts fresh.</li>
+          </ol>
+          <p class="helper-text">
+            Adjust grid spacing and units from the Drawing setup panel to match your project scale.
+          </p>
+        </div>
+
+        <footer class="tip-footer">
+          <strong>Tip</strong>
+          Draw walls in the order you would walk around the building. This keeps measurements tidy and makes it easier to spot missing segments.
+        </footer>
+      </aside>
+
+      <main>
+        <div class="canvas-wrapper">
+          <canvas id="planCanvas" aria-label="Plan canvas"></canvas>
+          <section class="metrics-overlay" aria-label="Live metrics" aria-live="polite">
+            <h2>Live metrics</h2>
+            <div class="metrics">
+              <div class="metric">
+                <span class="metric-label">Walls drawn</span>
+                <span id="wallCount">0</span>
+              </div>
+              <div class="metric">
+                <span class="metric-label">Total length</span>
+                <span id="totalLength">0</span>
+              </div>
+              <div class="metric">
+                <span class="metric-label">Enclosed area</span>
+                <span id="enclosedArea">0</span>
+              </div>
+              <div class="metric">
+                <span class="metric-label">Last wall</span>
+                <span id="lastWall">–</span>
+              </div>
+            </div>
+            <p class="overlay-note">Metrics update automatically as you draw.</p>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <div
+      id="openingPrompt"
+      class="opening-prompt"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="openingPromptTitle"
+      aria-describedby="openingPromptDescription"
+      hidden
+    >
+      <div class="opening-prompt__content">
+        <h2 id="openingPromptTitle">Opening dimensions</h2>
+        <p class="helper-text" id="openingPromptDescription"></p>
+        <form id="openingForm" class="opening-form">
+          <div class="field-grid">
+            <label class="field">
+              <span>Width</span>
+              <input id="openingWidth" name="openingWidth" type="number" min="0.1" step="0.01" required />
+            </label>
+            <label class="field">
+              <span>Height</span>
+              <input id="openingHeight" name="openingHeight" type="number" min="0.1" step="0.01" required />
+            </label>
+          </div>
+          <div class="opening-form__actions">
+            <button type="button" id="openingCancel" class="command-button command-button--ghost">Cancel</button>
+            <button type="submit" class="command-button">Use dimensions</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div
+      id="boqPrompt"
+      class="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="boqPromptTitle"
+      aria-describedby="boqPromptDescription"
+      hidden
+    >
+      <div class="modal-card">
+        <h2 id="boqPromptTitle">Bill of Quantities ready</h2>
+        <p id="boqPromptDescription" class="helper-text">
+          Your plan metrics have been sent to the spreadsheet. Download the BOQ to continue your workflow.
+        </p>
+        <div class="modal-actions">
+          <button id="boqCloseButton" type="button" class="command-button command-button--ghost">Close</button>
+          <button id="boqDownloadButton" type="button" class="command-button command-button--success">
+            Download BOQ
+          </button>
+        </div>
+      </div>
+    </div>
 
     <script src="sheets-export.js"></script>
     <script type="module" src="assets/js/main.js"></script>
