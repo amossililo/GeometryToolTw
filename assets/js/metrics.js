@@ -32,6 +32,8 @@ export function computeMetricsSnapshot() {
 
   let windowArea = 0;
   let doorArea = 0;
+  let windowCount = 0;
+  let doorCount = 0;
   state.walls.forEach((wall) => {
     if (!wall || !Array.isArray(wall.features)) return;
     wall.features.forEach((feature) => {
@@ -39,11 +41,16 @@ export function computeMetricsSnapshot() {
       const area = Number.isFinite(feature.area)
         ? feature.area
         : Number(feature.widthUnits) * Number(feature.heightUnits);
-      if (!Number.isFinite(area) || area <= 0) return;
       if (feature.type === 'door') {
-        doorArea += area;
+        doorCount += 1;
+        if (Number.isFinite(area) && area > 0) {
+          doorArea += area;
+        }
       } else if (feature.type === 'window') {
-        windowArea += area;
+        windowCount += 1;
+        if (Number.isFinite(area) && area > 0) {
+          windowArea += area;
+        }
       }
     });
   });
@@ -63,6 +70,8 @@ export function computeMetricsSnapshot() {
     unitPerCell: state.unitPerCell,
     windowArea,
     doorArea,
+    windowCount,
+    doorCount,
   };
 }
 
@@ -71,6 +80,8 @@ export function createMetricsManager({
   totalLengthEl,
   lastWallEl,
   areaEl,
+  windowCountEl,
+  doorCountEl,
 }) {
   function updateMetrics() {
     const metrics = computeMetricsSnapshot();
@@ -90,6 +101,12 @@ export function createMetricsManager({
         metrics.lastWallLengthDisplay == null
           ? '–'
           : `${metrics.lastWallLengthDisplay} ${metrics.unitLabel}`;
+    }
+    if (windowCountEl) {
+      windowCountEl.textContent = metrics.windowCount.toString();
+    }
+    if (doorCountEl) {
+      doorCountEl.textContent = metrics.doorCount.toString();
     }
 
     return metrics;

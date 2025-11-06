@@ -211,6 +211,24 @@ input:focus {
   display: none;
 }
 
+.setup-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.setup-panel__title {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--ink);
+}
+
+.setup-panel__close {
+  margin-left: auto;
+}
+
 .setup-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -299,19 +317,6 @@ aside p {
   color: var(--ink-soft);
 }
 
-.tip-footer {
-  margin-top: auto;
-  font-size: 0.78rem;
-  color: var(--ink-soft);
-  line-height: 1.4;
-}
-
-.tip-footer strong {
-  display: block;
-  color: var(--ink);
-  margin-bottom: 4px;
-}
-
 main {
   position: relative;
   display: flex;
@@ -338,11 +343,11 @@ canvas {
   position: absolute;
   top: 18px;
   right: 18px;
-  background: rgba(17, 24, 39, 0.92);
+  background: rgba(17, 24, 39, 0.82);
   color: #f9fafb;
   border-radius: 18px;
-  padding: 18px;
-  width: min(280px, 45%);
+  padding: 16px;
+  width: min(240px, 38%);
   display: grid;
   gap: 12px;
   box-shadow: 0 16px 38px rgba(15, 23, 42, 0.25);

@@ -15,9 +15,12 @@ const wallCountEl = document.getElementById('wallCount');
 const totalLengthEl = document.getElementById('totalLength');
 const lastWallEl = document.getElementById('lastWall');
 const areaEl = document.getElementById('enclosedArea');
+const windowCountEl = document.getElementById('windowCount');
+const doorCountEl = document.getElementById('doorCount');
 
 const setupToggle = document.getElementById('setupToggle');
 const setupPanel = document.getElementById('setupPanel');
+const setupCloseButton = document.getElementById('setupClose');
 
 const drawToolButton = document.getElementById('drawToolButton');
 const windowToolButton = document.getElementById('windowToolButton');
@@ -64,7 +67,14 @@ const boqProgressSteps = boqPrompt
 const toolButtons = [drawToolButton, windowToolButton, doorToolButton].filter(Boolean);
 
 const drawing = createCanvasDrawing(canvas);
-const metricsManager = createMetricsManager({ wallCountEl, totalLengthEl, lastWallEl, areaEl });
+const metricsManager = createMetricsManager({
+  wallCountEl,
+  totalLengthEl,
+  lastWallEl,
+  areaEl,
+  windowCountEl,
+  doorCountEl,
+});
 
 if (gridSizeInput) {
   gridSizeInput.value = state.gridSize;
@@ -162,11 +172,15 @@ function toggleSetupPanel(forceState) {
   setupToggle.setAttribute('aria-expanded', String(isOpen));
 }
 
-function closeSetupPanel() {
+function closeSetupPanel(options = {}) {
+  const { focusToggle = false } = options;
   if (!setupPanel || setupPanel.hasAttribute('hidden')) return;
   setupPanel.setAttribute('hidden', '');
   if (setupToggle) {
     setupToggle.setAttribute('aria-expanded', 'false');
+    if (focusToggle && typeof setupToggle.focus === 'function') {
+      setupToggle.focus();
+    }
   }
 }
 
@@ -364,6 +378,12 @@ if (setupToggle) {
     if (willOpen && setupPanel) {
       setupPanel.focus?.();
     }
+  });
+}
+
+if (setupCloseButton) {
+  setupCloseButton.addEventListener('click', () => {
+    closeSetupPanel({ focusToggle: true });
   });
 }
 
@@ -706,6 +726,8 @@ if (
             metrics.windowArea > 0
               ? `${formatNumber(metrics.windowArea)} ${metrics.unitLabel}²`
               : null,
+          doorCount: metrics.doorCount,
+          windowCount: metrics.windowCount,
         },
       };
     },
