@@ -222,7 +222,7 @@ function resetBoqProgress() {
   updateBoqProgress('compile', 'idle');
   if (boqPromptDescription) {
     boqPromptDescription.textContent =
-      "We're sharing your plan with our engineers. Sit tight—we'll download the BOQ as soon as it's ready.";
+      "We're sharing your plan with our engineers. Sit tight—we'll open the BOQ as soon as it's ready.";
   }
   if (boqDownloadButton) {
     boqDownloadButton.disabled = true;
@@ -261,7 +261,7 @@ function normalizeDownloadUrl(downloadUrl) {
       const idFromParams = parsed.searchParams.get('id');
       const fileId = idFromPath ? idFromPath[1] : idFromParams;
       if (fileId) {
-        return `https://drive.google.com/uc?export=download&id=${fileId}`;
+        return `https://drive.google.com/file/d/${fileId}/view`;
       }
     }
     return parsed.toString();
@@ -274,24 +274,16 @@ function normalizeDownloadUrl(downloadUrl) {
 function triggerBoqDownload(url) {
   if (!url) return false;
   try {
-    const link = document.createElement('a');
-    link.href = url;
-    link.target = '_blank';
-    link.rel = 'noopener';
-    link.download = 'house-plan-boq.pdf';
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    return true;
+    const openedWindow = window.open(url, '_blank', 'noopener');
+    if (openedWindow) {
+      openedWindow.opener = null;
+      return true;
+    }
   } catch (error) {
-    console.warn('Failed to trigger BOQ download automatically:', error);
+    console.warn('Failed to open BOQ link automatically:', error);
+    return false;
   }
-  const fallbackWindow = window.open(url, '_blank', 'noopener');
-  if (fallbackWindow) {
-    fallbackWindow.opener = null;
-    return true;
-  }
+  console.warn('Failed to open BOQ link automatically.');
   return false;
 }
 
@@ -433,14 +425,14 @@ if (boqDownloadButton) {
     if (started) {
       updateBoqProgress('compile', 'complete');
       if (boqPromptDescription) {
-        boqPromptDescription.textContent = 'We started your download. Use the button below if you need it again.';
+        boqPromptDescription.textContent = 'We opened your BOQ in a new tab. Use the button below if you need it again.';
       }
-      showCommandHint('Your BOQ download has started.', 'success');
+      showCommandHint('We opened your BOQ in a new tab.', 'success');
     } else {
       updateBoqProgress('compile', 'error');
       if (boqPromptDescription) {
         boqPromptDescription.textContent =
-          'We couldn’t open the download link. Please double-check the handoff link and try again.';
+          'We couldn’t open the BOQ link. Please double-check the handoff link and try again.';
       }
       showCommandHint('We couldn’t open the BOQ link automatically. Please check the handoff link.', 'error');
     }
@@ -558,7 +550,7 @@ if (
       updateBoqProgress('compile', 'pending');
       if (boqPromptDescription) {
         boqPromptDescription.textContent =
-          'Engineers are compiling your BOQ. We will start the download automatically.';
+          'Engineers are compiling your BOQ. We will open it in a new tab automatically.';
       }
 
       if (boqDownloadButton) {
@@ -574,16 +566,16 @@ if (
       if (started) {
         updateBoqProgress('compile', 'complete');
         if (boqPromptDescription) {
-          boqPromptDescription.textContent = 'We started your download. Use the button below if you need it again.';
+          boqPromptDescription.textContent = 'We opened your BOQ in a new tab. Use the button below if you need it again.';
         }
-        showCommandHint('Your BOQ download has started.', 'success');
+        showCommandHint('We opened your BOQ in a new tab.', 'success');
       } else {
         updateBoqProgress('compile', 'error');
         if (boqPromptDescription) {
           boqPromptDescription.textContent =
-            'We couldn’t start the download automatically. Use the button below to get your BOQ.';
+            'We couldn’t open the BOQ automatically. Use the button below to open it.';
         }
-        showCommandHint('Download your BOQ using the button in the dialog.', 'info');
+        showCommandHint('Open your BOQ using the button in the dialog.', 'info');
       }
     },
     onError: (error) => {
