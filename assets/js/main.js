@@ -7,7 +7,7 @@ import { createMetricsManager, computeMetricsSnapshot } from './metrics.js';
 import { selectedWallHasOpenings, getOpeningPreset, setOpeningPreset } from './openings.js';
 
 const DEFAULT_SHEETS_WEB_APP_URL =
-  'https://script.google.com/macros/s/AKfycbysgPsNY_xsYgQJnxN0QuIvRRHKHMZfdRcx4T8rLqVMmcgMc-zEIJoe-QU71cN5HR4/exec';
+  'https://script.google.com/macros/s/AKfycbymYj2UAfOovZdhd2cnDcWVwDg50QTMb4E0CLnPgnKVTLZJWzx9giLgucKfOEHOFZxf/exec';
 
 const canvas = document.getElementById('planCanvas');
 const wallCountEl = document.getElementById('wallCount');
