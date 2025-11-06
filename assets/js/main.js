@@ -7,7 +7,7 @@ import { createMetricsManager, computeMetricsSnapshot } from './metrics.js';
 import { selectedWallHasOpenings, getOpeningPreset, setOpeningPreset } from './openings.js';
 
 const DEFAULT_SHEETS_WEB_APP_URL =
-  'https://script.google.com/macros/s/AKfycbymYj2UAfOovZdhd2cnDcWVwDg50QTMb4E0CLnPgnKVTLZJWzx9giLgucKfOEHOFZxf/exec';
+  'https://script.google.com/macros/s/AKfycbxXBv-LEIhYb0KbWuhRYRu_6wl3_mk6hqcdA5Y_uXXiXP3gnFvbDuzA8MBIWTPxLSvE/exec';
 const DEFAULT_BOQ_EXPORT_URL = `${DEFAULT_SHEETS_WEB_APP_URL}?action=export&type=pdf`;
 
 const canvas = document.getElementById('planCanvas');
