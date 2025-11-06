@@ -338,7 +338,8 @@ if (boqCloseButton) {
 
 if (boqDownloadButton) {
   boqDownloadButton.addEventListener('click', () => {
-    const downloadWindow = window.open(DEFAULT_SHEETS_WEB_APP_URL, '_blank', 'noopener');
+    const downloadUrl = `${DEFAULT_SHEETS_WEB_APP_URL}?action=export&type=pdf`;
+    const downloadWindow = window.open(downloadUrl, '_blank', 'noopener');
     if (downloadWindow) {
       downloadWindow.opener = null;
     }
