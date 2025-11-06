@@ -434,6 +434,70 @@ canvas {
   box-shadow: 0 28px 60px rgba(15, 23, 42, 0.26);
 }
 
+.progress-steps {
+  display: grid;
+  gap: 10px;
+}
+
+.progress-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #f3f4f6;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  font-weight: 600;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.progress-step__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #d1d5db;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.progress-step__label {
+  flex: 1;
+}
+
+.progress-step[data-state='pending'] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.progress-step[data-state='pending'] .progress-step__icon {
+  background: var(--accent);
+  transform: scale(1.05);
+}
+
+.progress-step[data-state='complete'] {
+  background: rgba(5, 150, 105, 0.14);
+  color: #047857;
+}
+
+.progress-step[data-state='complete'] .progress-step__icon {
+  background: #047857;
+}
+
+.progress-step[data-state='error'] {
+  background: rgba(220, 38, 38, 0.12);
+  color: #b91c1c;
+}
+
+.progress-step[data-state='error'] .progress-step__icon {
+  background: #dc2626;
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;
