@@ -6,6 +6,9 @@ import { computeConnectivity } from './connectivity.js';
 import { createMetricsManager, computeMetricsSnapshot } from './metrics.js';
 import { selectedWallHasOpenings, getOpeningPreset, setOpeningPreset } from './openings.js';
 
+const DEFAULT_SHEETS_WEB_APP_URL =
+  'https://script.google.com/macros/s/AKfycbysgPsNY_xsYgQJnxN0QuIvRRHKHMZfdRcx4T8rLqVMmcgMc-zEIJoe-QU71cN5HR4/exec';
+
 const canvas = document.getElementById('planCanvas');
 const wallCountEl = document.getElementById('wallCount');
 const totalLengthEl = document.getElementById('totalLength');
@@ -24,6 +27,7 @@ const clearButton = document.getElementById('clearButton');
 const eraseButton = document.getElementById('eraseButton');
 const downloadButton = document.getElementById('downloadButton');
 const clearOpeningsButton = document.getElementById('clearOpeningsButton');
+const generateBoqButton = document.getElementById('generateBoqButton');
 
 const sheetsUrlInput = document.getElementById('sheetsUrl');
 const sheetsStatusEl = document.getElementById('sheetsStatus');
@@ -43,15 +47,33 @@ const openingHeightInput = document.getElementById('openingHeight');
 const openingPromptTitle = document.getElementById('openingPromptTitle');
 const openingPromptDescription = document.getElementById('openingPromptDescription');
 
+const boqPrompt = document.getElementById('boqPrompt');
+const boqDownloadButton = document.getElementById('boqDownloadButton');
+const boqCloseButton = document.getElementById('boqCloseButton');
+
 const toolButtons = [drawToolButton, windowToolButton, doorToolButton].filter(Boolean);
 
 const drawing = createCanvasDrawing(canvas);
 const metricsManager = createMetricsManager({ wallCountEl, totalLengthEl, lastWallEl, areaEl });
 
+if (gridSizeInput) {
+  gridSizeInput.value = state.gridSize;
+}
+if (unitLabelInput) {
+  unitLabelInput.value = state.unitLabel;
+}
+if (unitPerCellInput) {
+  unitPerCellInput.value = state.unitPerCell;
+}
+if (sheetsUrlInput && !sheetsUrlInput.value) {
+  sheetsUrlInput.value = DEFAULT_SHEETS_WEB_APP_URL;
+}
+
 let sheetsExporter = null;
 let hintTimeout = null;
 let pendingOpeningType = null;
 let lastOpeningTrigger = null;
+let lastFocusedBeforeBoq = null;
 
 function formatNumber(value) {
   if (!Number.isFinite(value)) return '';
@@ -163,6 +185,23 @@ function closeOpeningPrompt({ focusTrigger = true } = {}) {
     lastOpeningTrigger.focus();
   }
   lastOpeningTrigger = null;
+}
+
+function openBoqPrompt() {
+  if (!boqPrompt) return;
+  lastFocusedBeforeBoq = document.activeElement;
+  boqPrompt.removeAttribute('hidden');
+  const focusTarget = boqDownloadButton || boqCloseButton;
+  focusTarget?.focus?.();
+}
+
+function closeBoqPrompt({ restoreFocus = true } = {}) {
+  if (!boqPrompt) return;
+  boqPrompt.setAttribute('hidden', '');
+  if (restoreFocus && lastFocusedBeforeBoq && typeof lastFocusedBeforeBoq.focus === 'function') {
+    lastFocusedBeforeBoq.focus();
+  }
+  lastFocusedBeforeBoq = null;
 }
 
 function handleWallsChanged() {
@@ -283,6 +322,31 @@ if (openingPrompt) {
   });
 }
 
+if (boqPrompt) {
+  boqPrompt.addEventListener('click', (evt) => {
+    if (evt.target === boqPrompt) {
+      closeBoqPrompt();
+    }
+  });
+}
+
+if (boqCloseButton) {
+  boqCloseButton.addEventListener('click', () => {
+    closeBoqPrompt();
+  });
+}
+
+if (boqDownloadButton) {
+  boqDownloadButton.addEventListener('click', () => {
+    const downloadWindow = window.open(DEFAULT_SHEETS_WEB_APP_URL, '_blank', 'noopener');
+    if (downloadWindow) {
+      downloadWindow.opener = null;
+    }
+    closeBoqPrompt({ restoreFocus: false });
+    showCommandHint('BOQ download opened in a new tab.', 'success');
+  });
+}
+
 if (openingForm) {
   openingForm.addEventListener('submit', (evt) => {
     evt.preventDefault();
@@ -342,6 +406,19 @@ if (clearOpeningsButton) {
   });
 }
 
+if (generateBoqButton) {
+  generateBoqButton.addEventListener('click', () => {
+    if (!sheetsExporter) {
+      showCommandHint('Google Sheets export is still initialising. Try again in a moment.', 'error');
+      return;
+    }
+    closeSetupPanel();
+    const metrics = metricsManager.updateMetrics();
+    sheetsExporter.setLatestMetrics?.(metrics);
+    sheetsExporter.send();
+  });
+}
+
 if (
   typeof window.setupSheetsExport === 'function' &&
   sheetsUrlInput &&
@@ -352,6 +429,24 @@ if (
     urlInput: sheetsUrlInput,
     triggerButton: sendSheetsButton,
     statusElement: sheetsStatusEl,
+    defaultUrl: DEFAULT_SHEETS_WEB_APP_URL,
+    onBeforeSend: () => {
+      if (generateBoqButton) {
+        generateBoqButton.disabled = true;
+        generateBoqButton.setAttribute('aria-busy', 'true');
+      }
+    },
+    onAfterSend: () => {
+      if (generateBoqButton) {
+        generateBoqButton.disabled = false;
+        generateBoqButton.removeAttribute('aria-busy');
+      }
+    },
+    onSuccess: () => {
+      showCommandHint('Metrics sent to Google Sheets. Ready to download BOQ.', 'success');
+      closeSetupPanel();
+      openBoqPrompt();
+    },
     getMetrics: () => {
       const metrics = state.latestMetrics ?? computeMetricsSnapshot();
       return {
@@ -372,15 +467,15 @@ if (
           unitLabel: metrics.unitLabel,
           unitsPerSquare: metrics.unitPerCell,
           gridSpacing: metrics.gridSpacing,
-          windowArea: metrics.windowArea,
-          windowAreaLabel:
-            metrics.windowArea > 0
-              ? `${formatNumber(metrics.windowArea)} ${metrics.unitLabel}²`
-              : null,
           doorArea: metrics.doorArea,
           doorAreaLabel:
             metrics.doorArea > 0
               ? `${formatNumber(metrics.doorArea)} ${metrics.unitLabel}²`
+              : null,
+          windowArea: metrics.windowArea,
+          windowAreaLabel:
+            metrics.windowArea > 0
+              ? `${formatNumber(metrics.windowArea)} ${metrics.unitLabel}²`
               : null,
         },
       };
@@ -390,13 +485,20 @@ if (
 
 window.addEventListener('keydown', (evt) => {
   if (evt.key === 'Escape') {
+    let closedBoq = false;
+    if (boqPrompt && !boqPrompt.hasAttribute('hidden')) {
+      closeBoqPrompt();
+      closedBoq = true;
+    }
     if (openingPrompt && !openingPrompt.hasAttribute('hidden')) {
       closeOpeningPrompt();
     }
     if (setupPanel && !setupPanel.hasAttribute('hidden')) {
       closeSetupPanel();
     }
-    setActiveTool('draw');
+    if (!closedBoq) {
+      setActiveTool('draw');
+    }
   }
 });
 

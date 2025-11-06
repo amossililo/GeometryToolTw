@@ -1,10 +1,10 @@
 export const state = {
-  gridSize: 30,
+  gridSize: 15,
   walls: [],
   isDrawing: false,
   preview: null,
   unitLabel: 'm',
-  unitPerCell: 1,
+  unitPerCell: 0.5,
   selectedWallIndex: null,
   openWallIndexes: new Set(),
   openEndpoints: [],

@@ -162,6 +162,21 @@ input:focus {
   box-shadow: none;
 }
 
+.command-button--success {
+  background: #059669;
+  color: #f0fdf4;
+}
+
+.command-button--success:hover {
+  background: #047857;
+  box-shadow: 0 8px 18px rgba(4, 120, 87, 0.28);
+}
+
+.command-button--boq {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
 .command-hint {
   margin: 0;
   font-size: 0.78rem;
@@ -392,6 +407,37 @@ canvas {
   display: grid;
   gap: 16px;
   box-shadow: 0 28px 60px rgba(15, 23, 42, 0.26);
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.48);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 30;
+}
+
+.modal-overlay[hidden] {
+  display: none;
+}
+
+.modal-card {
+  background: #fff;
+  border-radius: 18px;
+  padding: 24px;
+  width: min(420px, 100%);
+  display: grid;
+  gap: 16px;
+  box-shadow: 0 28px 60px rgba(15, 23, 42, 0.26);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .opening-form {
