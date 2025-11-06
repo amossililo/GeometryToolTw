@@ -498,6 +498,24 @@ canvas {
   background: #dc2626;
 }
 
+.boq-response-preview {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #0f172a;
+  color: #f8fafc;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 160px;
+  overflow: auto;
+}
+
+.boq-response-preview[hidden] {
+  display: none;
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;

@@ -186,7 +186,7 @@
       <div class="modal-card">
         <h2 id="boqPromptTitle">Preparing your BOQ</h2>
         <p id="boqPromptDescription" class="helper-text">
-          We&apos;re sharing your plan with our engineers. Sit tight—we&apos;ll download the BOQ as soon as it&apos;s ready.
+          We&apos;re sharing your plan with our engineers. Sit tight—we&apos;ll fetch the BOQ status as soon as it&apos;s ready.
         </p>
         <div class="progress-steps" role="status" aria-live="polite">
           <div class="progress-step" data-progress-step="send" data-state="idle">
@@ -202,6 +202,12 @@
             <span class="progress-step__label">Engineers compiling BOQ</span>
           </div>
         </div>
+        <pre
+          id="boqResponsePreview"
+          class="boq-response-preview"
+          aria-live="polite"
+          hidden
+        ></pre>
         <div class="modal-actions">
           <button id="boqCloseButton" type="button" class="command-button command-button--ghost">Close</button>
           <button
@@ -210,7 +216,7 @@
             class="command-button command-button--success"
             hidden
           >
-            Download BOQ
+            Open BOQ link
           </button>
         </div>
       </div>

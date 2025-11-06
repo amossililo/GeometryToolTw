@@ -52,6 +52,7 @@ const boqPrompt = document.getElementById('boqPrompt');
 const boqPromptDescription = document.getElementById('boqPromptDescription');
 const boqDownloadButton = document.getElementById('boqDownloadButton');
 const boqCloseButton = document.getElementById('boqCloseButton');
+const boqResponsePreview = document.getElementById('boqResponsePreview');
 const boqProgressSteps = boqPrompt
   ? {
       send: boqPrompt.querySelector('[data-progress-step="send"]'),
@@ -84,7 +85,7 @@ let pendingOpeningType = null;
 let lastOpeningTrigger = null;
 let lastFocusedBeforeBoq = null;
 let lastDownloadUrl = DEFAULT_BOQ_EXPORT_URL;
-let preparedBoqWindow = null;
+let boqPollTimeout = null;
 
 function formatNumber(value) {
   if (!Number.isFinite(value)) return '';
@@ -218,17 +219,25 @@ function updateBoqProgress(stepKey, state) {
 
 function resetBoqProgress() {
   lastDownloadUrl = DEFAULT_BOQ_EXPORT_URL;
+  if (boqPollTimeout) {
+    clearTimeout(boqPollTimeout);
+    boqPollTimeout = null;
+  }
   updateBoqProgress('send', 'pending');
   updateBoqProgress('review', 'idle');
   updateBoqProgress('compile', 'idle');
   if (boqPromptDescription) {
     boqPromptDescription.textContent =
-      "We're sharing your plan with our engineers. Sit tight—we'll open the BOQ as soon as it's ready.";
+      "We're sharing your plan with our engineers. Sit tight—we'll fetch the BOQ status as soon as it's ready.";
   }
   if (boqDownloadButton) {
     boqDownloadButton.disabled = true;
     boqDownloadButton.setAttribute('hidden', '');
-    boqDownloadButton.textContent = 'Download BOQ';
+    boqDownloadButton.textContent = 'Open BOQ link';
+  }
+  if (boqResponsePreview) {
+    boqResponsePreview.textContent = '';
+    boqResponsePreview.setAttribute('hidden', '');
   }
 }
 
@@ -272,82 +281,16 @@ function normalizeDownloadUrl(downloadUrl) {
   }
 }
 
-function ensurePreparedBoqWindow() {
-  if (preparedBoqWindow && !preparedBoqWindow.closed) {
-    return preparedBoqWindow;
-  }
-
+function buildBoqExportUrl(sourceUrl) {
   try {
-    const stubWindow = window.open('', '_blank', 'noopener');
-    if (stubWindow) {
-      stubWindow.opener = null;
-      stubWindow.document.write(
-        '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Preparing your BOQ…</title>' +
-          '<style>body{font-family:system-ui,sans-serif;margin:0;display:flex;min-height:100vh;align-items:center;justify-content:center;background:#f8fafc;color:#0f172a;}@media (prefers-color-scheme:dark){body{background:#0f172a;color:#f8fafc;}}</style>' +
-          '</head><body><div><h1 style="font-size:1.5rem;margin-bottom:0.5rem;">Preparing your BOQ…</h1>' +
-          '<p style="margin:0;font-size:1rem;max-width:24rem;line-height:1.5;">Sit tight while we fetch your bill of quantities. We’ll show it here as soon as it’s ready.</p></div></body></html>'
-      );
-      stubWindow.document.close();
-      preparedBoqWindow = stubWindow;
-      return stubWindow;
-    }
+    const parsed = new URL(sourceUrl || DEFAULT_SHEETS_WEB_APP_URL, window.location.href);
+    parsed.searchParams.set('action', 'export');
+    parsed.searchParams.set('type', 'pdf');
+    return parsed.toString();
   } catch (error) {
-    console.warn('Failed to prepare BOQ window:', error);
+    console.warn('Failed to build BOQ export URL from source:', error);
+    return DEFAULT_BOQ_EXPORT_URL;
   }
-
-  preparedBoqWindow = null;
-  return null;
-}
-
-function discardPreparedBoqWindow({ close } = {}) {
-  if (preparedBoqWindow && !preparedBoqWindow.closed) {
-    try {
-      if (close) {
-        preparedBoqWindow.close();
-      }
-    } catch (error) {
-      console.warn('Failed to close prepared BOQ window:', error);
-    }
-  }
-  preparedBoqWindow = null;
-}
-
-function triggerBoqDownload(url, { preferPrepared = false } = {}) {
-  if (!url) {
-    if (preferPrepared) {
-      discardPreparedBoqWindow({ close: true });
-    }
-    return false;
-  }
-
-  if (preferPrepared && preparedBoqWindow && preparedBoqWindow.closed) {
-    preparedBoqWindow = null;
-  }
-
-  if (preferPrepared && preparedBoqWindow && !preparedBoqWindow.closed) {
-    try {
-      preparedBoqWindow.location.replace(url);
-      preparedBoqWindow.focus();
-      preparedBoqWindow = null;
-      return true;
-    } catch (error) {
-      console.warn('Failed to reuse prepared BOQ window:', error);
-      discardPreparedBoqWindow({ close: true });
-    }
-  }
-
-  try {
-    const openedWindow = window.open(url, '_blank', 'noopener');
-    if (openedWindow) {
-      openedWindow.opener = null;
-      return true;
-    }
-  } catch (error) {
-    console.warn('Failed to open BOQ link automatically:', error);
-    return false;
-  }
-  console.warn('Failed to open BOQ link automatically.');
-  return false;
 }
 
 function handleWallsChanged() {
@@ -484,21 +427,33 @@ if (boqCloseButton) {
 
 if (boqDownloadButton) {
   boqDownloadButton.addEventListener('click', () => {
-    discardPreparedBoqWindow({ close: true });
-    const started = triggerBoqDownload(lastDownloadUrl || DEFAULT_BOQ_EXPORT_URL);
-    if (started) {
-      updateBoqProgress('compile', 'complete');
-      if (boqPromptDescription) {
-        boqPromptDescription.textContent = 'We opened your BOQ in a new tab. Use the button below if you need it again.';
+    const targetUrl = lastDownloadUrl || DEFAULT_BOQ_EXPORT_URL;
+    if (!targetUrl) {
+      showCommandHint('No BOQ link is available yet. Please wait a moment and try again.', 'error');
+      return;
+    }
+
+    try {
+      const openedWindow = window.open(targetUrl, '_blank', 'noopener');
+      if (openedWindow) {
+        openedWindow.opener = null;
+        updateBoqProgress('compile', 'complete');
+        if (boqPromptDescription) {
+          boqPromptDescription.textContent =
+            'We opened the BOQ link in a new tab. If you need it again, use the button below or copy the response.';
+        }
+        showCommandHint('Opened the BOQ link in a new tab.', 'success');
+      } else {
+        throw new Error('Popup blocked or window was not created.');
       }
-      showCommandHint('We opened your BOQ in a new tab.', 'success');
-    } else {
+    } catch (downloadError) {
       updateBoqProgress('compile', 'error');
       if (boqPromptDescription) {
         boqPromptDescription.textContent =
-          'We couldn’t open the BOQ link. Please double-check the handoff link and try again.';
+          'We could not open the BOQ link automatically. Copy the link from the response preview or adjust your popup settings.';
       }
-      showCommandHint('We couldn’t open the BOQ link automatically. Please check the handoff link.', 'error');
+      const message = downloadError && downloadError.message ? downloadError.message : 'Unknown error.';
+      showCommandHint(`We couldn’t open the BOQ link automatically: ${message}`, 'error');
     }
   });
 }
@@ -569,10 +524,6 @@ if (generateBoqButton) {
       return;
     }
     closeSetupPanel();
-    const stubWindow = ensurePreparedBoqWindow();
-    if (!stubWindow) {
-      showCommandHint('If the BOQ doesn’t open automatically, use the download button in the dialog.', 'info');
-    }
     const metrics = metricsManager.updateMetrics();
     sheetsExporter.setLatestMetrics?.(metrics);
     sheetsExporter.send();
@@ -613,45 +564,103 @@ if (
 
       const normalisedUrl = normalizeDownloadUrl(responseJson?.downloadUrl);
       lastDownloadUrl = normalisedUrl || DEFAULT_BOQ_EXPORT_URL;
+      const exportUrl = buildBoqExportUrl(url);
+
+      if (boqPollTimeout) {
+        clearTimeout(boqPollTimeout);
+        boqPollTimeout = null;
+      }
 
       updateBoqProgress('review', 'complete');
       updateBoqProgress('compile', 'pending');
       if (boqPromptDescription) {
         boqPromptDescription.textContent =
-          'Engineers are compiling your BOQ. We will open it in a new tab automatically.';
+          'Engineers are compiling your BOQ. We will check back for the download link shortly.';
       }
 
       if (boqDownloadButton) {
         boqDownloadButton.disabled = false;
         boqDownloadButton.removeAttribute('hidden');
+        boqDownloadButton.textContent = 'Open BOQ link';
       }
 
-      const started = triggerBoqDownload(lastDownloadUrl, { preferPrepared: true });
-      if (boqDownloadButton) {
-        boqDownloadButton.textContent = started ? 'Download BOQ again' : 'Download BOQ';
+      if (boqResponsePreview) {
+        boqResponsePreview.textContent = '';
+        boqResponsePreview.setAttribute('hidden', '');
       }
 
-      if (started) {
-        updateBoqProgress('compile', 'complete');
-        if (boqPromptDescription) {
-          boqPromptDescription.textContent = 'We opened your BOQ in a new tab. Use the button below if you need it again.';
+      showCommandHint('Waiting for the BOQ export response…', 'info');
+
+      boqPollTimeout = window.setTimeout(async () => {
+        boqPollTimeout = null;
+        try {
+          const pollResponse = await fetch(exportUrl, {
+            method: 'GET',
+            headers: { Accept: 'application/json' },
+          });
+          const pollText = await pollResponse.text();
+          let displayText = pollText || '(empty response)';
+          let parsedPayload = null;
+          if (pollText) {
+            try {
+              parsedPayload = JSON.parse(pollText);
+              displayText = JSON.stringify(parsedPayload, null, 2);
+            } catch (parseError) {
+              // Non-JSON payloads will be shown as raw text.
+            }
+          }
+
+          if (parsedPayload && parsedPayload.downloadUrl) {
+            const fetchedUrl = normalizeDownloadUrl(parsedPayload.downloadUrl);
+            if (fetchedUrl) {
+              lastDownloadUrl = fetchedUrl;
+            }
+          }
+
+          if (boqResponsePreview) {
+            boqResponsePreview.textContent = displayText;
+            boqResponsePreview.removeAttribute('hidden');
+          }
+
+          if (pollResponse.ok) {
+            updateBoqProgress('compile', 'complete');
+            if (boqPromptDescription) {
+              boqPromptDescription.textContent =
+                'Engineers compiled the BOQ. Review the response below and open the link when you are ready.';
+            }
+            showCommandHint('BOQ response received. Use the link button to open it when ready.', 'success');
+          } else {
+            updateBoqProgress('compile', 'error');
+            if (boqPromptDescription) {
+              boqPromptDescription.textContent =
+                'We received a response, but it indicated an error. Review the details below.';
+            }
+            showCommandHint('The BOQ export returned an error response. Review the details shown.', 'error');
+          }
+        } catch (pollError) {
+          updateBoqProgress('compile', 'error');
+          const errorMessage = pollError && pollError.message ? pollError.message : 'Unknown polling error.';
+          if (boqResponsePreview) {
+            boqResponsePreview.textContent = `Polling failed: ${errorMessage}`;
+            boqResponsePreview.removeAttribute('hidden');
+          }
+          if (boqPromptDescription) {
+            boqPromptDescription.textContent =
+              'We could not fetch the BOQ response automatically. Use the link button to try manually.';
+          }
+          showCommandHint('We could not fetch the BOQ response automatically. Try the link button.', 'error');
         }
-        showCommandHint('We opened your BOQ in a new tab.', 'success');
-      } else {
-        updateBoqProgress('compile', 'error');
-        if (boqPromptDescription) {
-          boqPromptDescription.textContent =
-            'We couldn’t open the BOQ automatically. Use the button below to open it.';
-        }
-        showCommandHint('Open your BOQ using the button in the dialog.', 'info');
-      }
+      }, 3000);
     },
     onError: (error) => {
       openBoqPrompt();
       updateBoqProgress('send', 'error');
       updateBoqProgress('review', 'idle');
       updateBoqProgress('compile', 'idle');
-      discardPreparedBoqWindow({ close: true });
+      if (boqPollTimeout) {
+        clearTimeout(boqPollTimeout);
+        boqPollTimeout = null;
+      }
       if (boqPromptDescription) {
         boqPromptDescription.textContent =
           'We couldn’t reach our engineers. Please check the handoff link and try again.';
@@ -659,6 +668,10 @@ if (
       if (boqDownloadButton) {
         boqDownloadButton.disabled = true;
         boqDownloadButton.setAttribute('hidden', '');
+      }
+      if (boqResponsePreview) {
+        boqResponsePreview.textContent = '';
+        boqResponsePreview.setAttribute('hidden', '');
       }
       const message = error && error.message ? error.message : 'Unknown error.';
       showCommandHint(`We couldn’t reach our engineers: ${message}`, 'error');
