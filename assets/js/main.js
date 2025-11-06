@@ -554,7 +554,7 @@ if (
         generateBoqButton.removeAttribute('aria-busy');
       }
     },
-    onSuccess: ({ responseJson }) => {
+    onSuccess: ({ responseJson, url }) => {
       openBoqPrompt();
       updateBoqProgress('send', 'complete');
       updateBoqProgress('review', 'pending');
@@ -575,7 +575,7 @@ if (
       updateBoqProgress('compile', 'pending');
       if (boqPromptDescription) {
         boqPromptDescription.textContent =
-          'Engineers are compiling your BOQ. We will check back for the download link shortly.';
+          'Engineers are compiling your BOQ. We will check back for the download link in about 3 seconds.';
       }
 
       if (boqDownloadButton) {
@@ -589,7 +589,7 @@ if (
         boqResponsePreview.setAttribute('hidden', '');
       }
 
-      showCommandHint('Waiting for the BOQ export response…', 'info');
+      showCommandHint('Waiting 3 seconds before checking the BOQ export response…', 'info');
 
       boqPollTimeout = window.setTimeout(async () => {
         boqPollTimeout = null;
