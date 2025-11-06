@@ -84,6 +84,7 @@ let pendingOpeningType = null;
 let lastOpeningTrigger = null;
 let lastFocusedBeforeBoq = null;
 let lastDownloadUrl = DEFAULT_BOQ_EXPORT_URL;
+let preparedBoqWindow = null;
 
 function formatNumber(value) {
   if (!Number.isFinite(value)) return '';
@@ -271,8 +272,70 @@ function normalizeDownloadUrl(downloadUrl) {
   }
 }
 
-function triggerBoqDownload(url) {
-  if (!url) return false;
+function ensurePreparedBoqWindow() {
+  if (preparedBoqWindow && !preparedBoqWindow.closed) {
+    return preparedBoqWindow;
+  }
+
+  try {
+    const stubWindow = window.open('', '_blank', 'noopener');
+    if (stubWindow) {
+      stubWindow.opener = null;
+      stubWindow.document.write(
+        '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Preparing your BOQ…</title>' +
+          '<style>body{font-family:system-ui,sans-serif;margin:0;display:flex;min-height:100vh;align-items:center;justify-content:center;background:#f8fafc;color:#0f172a;}@media (prefers-color-scheme:dark){body{background:#0f172a;color:#f8fafc;}}</style>' +
+          '</head><body><div><h1 style="font-size:1.5rem;margin-bottom:0.5rem;">Preparing your BOQ…</h1>' +
+          '<p style="margin:0;font-size:1rem;max-width:24rem;line-height:1.5;">Sit tight while we fetch your bill of quantities. We’ll show it here as soon as it’s ready.</p></div></body></html>'
+      );
+      stubWindow.document.close();
+      preparedBoqWindow = stubWindow;
+      return stubWindow;
+    }
+  } catch (error) {
+    console.warn('Failed to prepare BOQ window:', error);
+  }
+
+  preparedBoqWindow = null;
+  return null;
+}
+
+function discardPreparedBoqWindow({ close } = {}) {
+  if (preparedBoqWindow && !preparedBoqWindow.closed) {
+    try {
+      if (close) {
+        preparedBoqWindow.close();
+      }
+    } catch (error) {
+      console.warn('Failed to close prepared BOQ window:', error);
+    }
+  }
+  preparedBoqWindow = null;
+}
+
+function triggerBoqDownload(url, { preferPrepared = false } = {}) {
+  if (!url) {
+    if (preferPrepared) {
+      discardPreparedBoqWindow({ close: true });
+    }
+    return false;
+  }
+
+  if (preferPrepared && preparedBoqWindow && preparedBoqWindow.closed) {
+    preparedBoqWindow = null;
+  }
+
+  if (preferPrepared && preparedBoqWindow && !preparedBoqWindow.closed) {
+    try {
+      preparedBoqWindow.location.replace(url);
+      preparedBoqWindow.focus();
+      preparedBoqWindow = null;
+      return true;
+    } catch (error) {
+      console.warn('Failed to reuse prepared BOQ window:', error);
+      discardPreparedBoqWindow({ close: true });
+    }
+  }
+
   try {
     const openedWindow = window.open(url, '_blank', 'noopener');
     if (openedWindow) {
@@ -421,6 +484,7 @@ if (boqCloseButton) {
 
 if (boqDownloadButton) {
   boqDownloadButton.addEventListener('click', () => {
+    discardPreparedBoqWindow({ close: true });
     const started = triggerBoqDownload(lastDownloadUrl || DEFAULT_BOQ_EXPORT_URL);
     if (started) {
       updateBoqProgress('compile', 'complete');
@@ -505,6 +569,10 @@ if (generateBoqButton) {
       return;
     }
     closeSetupPanel();
+    const stubWindow = ensurePreparedBoqWindow();
+    if (!stubWindow) {
+      showCommandHint('If the BOQ doesn’t open automatically, use the download button in the dialog.', 'info');
+    }
     const metrics = metricsManager.updateMetrics();
     sheetsExporter.setLatestMetrics?.(metrics);
     sheetsExporter.send();
@@ -558,7 +626,7 @@ if (
         boqDownloadButton.removeAttribute('hidden');
       }
 
-      const started = triggerBoqDownload(lastDownloadUrl);
+      const started = triggerBoqDownload(lastDownloadUrl, { preferPrepared: true });
       if (boqDownloadButton) {
         boqDownloadButton.textContent = started ? 'Download BOQ again' : 'Download BOQ';
       }
@@ -583,6 +651,7 @@ if (
       updateBoqProgress('send', 'error');
       updateBoqProgress('review', 'idle');
       updateBoqProgress('compile', 'idle');
+      discardPreparedBoqWindow({ close: true });
       if (boqPromptDescription) {
         boqPromptDescription.textContent =
           'We couldn’t reach our engineers. Please check the handoff link and try again.';
