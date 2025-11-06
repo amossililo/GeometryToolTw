@@ -43,6 +43,16 @@
         </button>
       </div>
       <div id="setupPanel" class="setup-panel" hidden tabindex="-1">
+        <div class="setup-panel__header">
+          <h2 class="setup-panel__title">Drawing setup</h2>
+          <button
+            id="setupClose"
+            type="button"
+            class="command-button command-button--ghost setup-panel__close"
+          >
+            Close
+          </button>
+        </div>
         <div class="setup-grid">
           <section aria-labelledby="setupHeading" class="setup-section">
             <h2 id="setupHeading">Grid &amp; scale</h2>
@@ -108,10 +118,6 @@
           </p>
         </div>
 
-        <footer class="tip-footer">
-          <strong>Tip</strong>
-          Draw walls in the order you would walk around the building. This keeps measurements tidy and makes it easier to spot missing segments.
-        </footer>
       </aside>
 
       <main>
@@ -135,6 +141,14 @@
               <div class="metric">
                 <span class="metric-label">Last wall</span>
                 <span id="lastWall">–</span>
+              </div>
+              <div class="metric">
+                <span class="metric-label">Windows placed</span>
+                <span id="windowCount">0</span>
+              </div>
+              <div class="metric">
+                <span class="metric-label">Doors placed</span>
+                <span id="doorCount">0</span>
               </div>
             </div>
             <p class="overlay-note">Metrics update automatically as you draw.</p>
