@@ -22,6 +22,7 @@
         onBeforeSend,
         onAfterSend,
         onSuccess,
+        onError,
       } = options || {};
       this.urlInput = urlInput || null;
       this.triggerButton = triggerButton || null;
@@ -34,6 +35,7 @@
       this.onBeforeSend = typeof onBeforeSend === 'function' ? onBeforeSend : null;
       this.onAfterSend = typeof onAfterSend === 'function' ? onAfterSend : null;
       this.onSuccess = typeof onSuccess === 'function' ? onSuccess : null;
+      this.onError = typeof onError === 'function' ? onError : null;
 
       this.handleSend = this.handleSend.bind(this);
       this.handleUrlInput = this.handleUrlInput.bind(this);
@@ -120,21 +122,21 @@
         this.urlInput.value = url;
       }
       if (!url) {
-        this.showStatus('Enter a Google Apps Script URL first.', 'error');
+        this.showStatus('Enter the engineer handoff link before sending.', 'error');
         this.updateButtonState();
         return;
       }
 
       const payload = this.getMetrics ? this.getMetrics(this.latestMetrics) : null;
       if (!payload || typeof payload !== 'object') {
-        this.showStatus('No metrics available to send yet.', 'error');
+        this.showStatus('We need some plan details before sending.', 'error');
         return;
       }
 
       try {
         this.isSending = true;
         this.updateButtonState();
-        this.showStatus('Sending data…', 'pending');
+        this.showStatus('Sending to our engineers…', 'pending');
         if (this.onBeforeSend) {
           this.onBeforeSend();
         }
@@ -163,15 +165,17 @@
           throw new Error(message);
         }
 
-        const successMessage =
-          (responseJson && responseJson.message) || 'Metrics sent to Google Sheets.';
+        const successMessage = (responseJson && responseJson.message) || 'Sent to our engineers.';
         this.showStatus(successMessage, 'success');
         if (this.onSuccess) {
           this.onSuccess({ responseJson, payload, url });
         }
       } catch (error) {
         const message = error && error.message ? error.message : 'Unknown error while sending data.';
-        this.showStatus(`Failed to send metrics: ${message}`, 'error');
+        this.showStatus(`We couldn't reach our engineers: ${message}`, 'error');
+        if (this.onError) {
+          this.onError(error);
+        }
       } finally {
         this.isSending = false;
         this.updateButtonState();

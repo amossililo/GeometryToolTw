@@ -197,7 +197,7 @@ function writeFixedValues(sheet, m) {
 // =========================
 function buildPdfExportUrl(ssId, gid) {
   const params = {
-    format: 'pdf', gid: gid, size: 'A4', portrait: 'false', fitw: 'true',
+    format: 'pdf', gid: gid, size: 'A4', portrait: 'true', fitw: 'true',
     gridlines: 'false', printtitle: 'false', sheetnames: 'false',
     pagenum: 'CENTER', fzr: 'true', scale: '2',
     top_margin: '0.5', right_margin: '0.5', bottom_margin: '0.5', left_margin: '0.5'

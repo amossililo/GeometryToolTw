@@ -70,15 +70,15 @@
           <section aria-labelledby="exportHeading" class="setup-section">
             <h2 id="exportHeading">Export</h2>
             <label class="field field-stacked">
-              <span>Google Apps Script URL</span>
+              <span>Engineer handoff link</span>
               <input id="sheetsUrl" type="url" inputmode="url" placeholder="https://script.google.com/..." />
             </label>
             <p class="helper-text">
-              A default Apps Script web app URL is prefilled for you. Replace it if you have your own deployment before
-              sending the current metrics.
+              A ready-to-use handoff link is provided. Replace it with your own workflow link before requesting a BOQ if
+              needed.
             </p>
             <button id="sendSheetsButton" type="button" class="command-button command-button--secondary">
-              Send to Google Sheets
+              Send to our engineers
             </button>
             <p id="sheetsStatus" class="status-line" role="status" aria-live="polite"></p>
           </section>
@@ -184,14 +184,39 @@
       hidden
     >
       <div class="modal-card">
-        <h2 id="boqPromptTitle">Bill of Quantities ready</h2>
+        <h2 id="boqPromptTitle">Preparing your BOQ</h2>
         <p id="boqPromptDescription" class="helper-text">
-          Your plan metrics have been sent to the spreadsheet. Download the BOQ to continue your workflow.
+          We&apos;re sharing your plan with our engineers. Sit tight—we&apos;ll fetch the BOQ status as soon as it&apos;s ready.
         </p>
+        <div class="progress-steps" role="status" aria-live="polite">
+          <div class="progress-step" data-progress-step="send" data-state="idle">
+            <span class="progress-step__icon" aria-hidden="true"></span>
+            <span class="progress-step__label">Sending to our engineers</span>
+          </div>
+          <div class="progress-step" data-progress-step="review" data-state="idle">
+            <span class="progress-step__icon" aria-hidden="true"></span>
+            <span class="progress-step__label">Engineers reviewing structure</span>
+          </div>
+          <div class="progress-step" data-progress-step="compile" data-state="idle">
+            <span class="progress-step__icon" aria-hidden="true"></span>
+            <span class="progress-step__label">Engineers compiling BOQ</span>
+          </div>
+        </div>
+        <pre
+          id="boqResponsePreview"
+          class="boq-response-preview"
+          aria-live="polite"
+          hidden
+        ></pre>
         <div class="modal-actions">
           <button id="boqCloseButton" type="button" class="command-button command-button--ghost">Close</button>
-          <button id="boqDownloadButton" type="button" class="command-button command-button--success">
-            Download BOQ
+          <button
+            id="boqDownloadButton"
+            type="button"
+            class="command-button command-button--success"
+            hidden
+          >
+            Open BOQ link
           </button>
         </div>
       </div>
