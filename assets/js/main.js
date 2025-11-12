@@ -23,6 +23,7 @@ const setupPanel = document.getElementById('setupPanel');
 const setupCloseButton = document.getElementById('setupClose');
 
 const drawToolButton = document.getElementById('drawToolButton');
+const moveToolButton = document.getElementById('moveToolButton');
 const windowToolButton = document.getElementById('windowToolButton');
 const doorToolButton = document.getElementById('doorToolButton');
 
@@ -32,6 +33,7 @@ const eraseButton = document.getElementById('eraseButton');
 const downloadButton = document.getElementById('downloadButton');
 const clearOpeningsButton = document.getElementById('clearOpeningsButton');
 const generateBoqButton = document.getElementById('generateBoqButton');
+const offsetWallButton = document.getElementById('offsetWallButton');
 
 const sheetsUrlInput = document.getElementById('sheetsUrl');
 const sheetsStatusEl = document.getElementById('sheetsStatus');
@@ -73,7 +75,7 @@ const boqProgressSteps = boqPrompt
     }
   : {};
 
-const toolButtons = [drawToolButton, windowToolButton, doorToolButton].filter(Boolean);
+const toolButtons = [drawToolButton, moveToolButton, windowToolButton, doorToolButton].filter(Boolean);
 
 const drawing = createCanvasDrawing(canvas);
 const metricsManager = createMetricsManager({
@@ -140,6 +142,11 @@ function updateClearOpeningsButton() {
   clearOpeningsButton.disabled = !selectedWallHasOpenings();
 }
 
+function updateOffsetButton() {
+  if (!offsetWallButton) return;
+  offsetWallButton.disabled = state.selectedWallIndex == null;
+}
+
 function updateToolStates(activeTool) {
   toolButtons.forEach((button) => {
     if (!button || !button.dataset.tool) return;
@@ -194,6 +201,11 @@ function setActiveTool(tool) {
 
   if (tool === 'draw') {
     showCommandHint('Drag on the grid to create new walls.', 'info');
+    return;
+  }
+
+  if (tool === 'move') {
+    showCommandHint('Click a wall, then drag to reposition it. Use Draw walls to sketch new segments.', 'info');
     return;
   }
 
@@ -363,6 +375,7 @@ function handleWallsChanged() {
   const metrics = metricsManager.updateMetrics();
   updateEraseButton();
   updateClearOpeningsButton();
+  updateOffsetButton();
   drawing.draw();
 
   if (sheetsExporter && typeof sheetsExporter.setLatestMetrics === 'function') {
@@ -373,6 +386,7 @@ function handleWallsChanged() {
 function handleSelectionChanged() {
   updateEraseButton();
   updateClearOpeningsButton();
+  updateOffsetButton();
 }
 
 setupPointerHandlers(canvas, drawing, {
@@ -477,6 +491,13 @@ if (drawToolButton) {
   drawToolButton.addEventListener('click', () => {
     closeOpeningPrompt({ focusTrigger: false });
     setActiveTool('draw');
+  });
+}
+
+if (moveToolButton) {
+  moveToolButton.addEventListener('click', () => {
+    closeOpeningPrompt({ focusTrigger: false });
+    setActiveTool('move');
   });
 }
 
@@ -610,7 +631,81 @@ if (clearOpeningsButton) {
       showCommandHint('Select a wall with windows or doors to clear them.', 'info');
     }
     updateClearOpeningsButton();
+    updateOffsetButton();
     drawing.draw();
+  });
+}
+
+if (offsetWallButton) {
+  offsetWallButton.addEventListener('click', () => {
+    const selectedIndex = state.selectedWallIndex;
+    if (selectedIndex == null) {
+      showCommandHint('Select a wall before using Offset wall.', 'info');
+      return;
+    }
+
+    const wall = state.walls[selectedIndex];
+    if (!wall) {
+      showCommandHint('The selected wall could not be found. Try selecting it again.', 'error');
+      updateOffsetButton();
+      return;
+    }
+
+    const unitLabel = state.unitLabel || 'units';
+    const unitPerCell = Number.isFinite(state.unitPerCell) && state.unitPerCell > 0 ? state.unitPerCell : 1;
+    const defaultDistance = unitPerCell;
+    const response = window.prompt(
+      `How far should we offset the wall? Enter a distance in ${unitLabel} (multiples of ${formatNumber(
+        unitPerCell
+      )} ${unitLabel}). Use negative values to offset in the opposite direction.`,
+      formatNumber(defaultDistance)
+    );
+
+    if (response == null) {
+      return;
+    }
+
+    const offsetUnits = Number(response);
+    if (!Number.isFinite(offsetUnits) || offsetUnits === 0) {
+      showCommandHint('Enter a non-zero number for the offset distance.', 'error');
+      return;
+    }
+
+    const offsetCellsRaw = offsetUnits / unitPerCell;
+    if (!Number.isFinite(offsetCellsRaw)) {
+      showCommandHint('Enter a valid number for the offset distance.', 'error');
+      return;
+    }
+
+    const offsetCells = Math.round(offsetCellsRaw);
+    if (offsetCells === 0) {
+      showCommandHint('The offset must be at least half a grid square.', 'error');
+      return;
+    }
+
+    const snapped = Math.abs(offsetCellsRaw - offsetCells) > 1e-6;
+    const result = wallActions.offsetSelected(offsetCells);
+
+    if (result.success) {
+      const distanceUnits = Math.abs(offsetCells) * unitPerCell;
+      const distanceLabel = formatNumber(distanceUnits);
+      const message = snapped
+        ? `Offset wall created ${distanceLabel} ${unitLabel} away (snapped to the nearest grid line).`
+        : `Offset wall created ${distanceLabel} ${unitLabel} away.`;
+      showCommandHint(message, 'success');
+      updateOffsetButton();
+      drawing.draw();
+    } else {
+      const message =
+        result.reason === 'no-selection'
+          ? 'Select a wall before using Offset wall.'
+          : result.reason === 'invalid-offset'
+          ? 'Enter a non-zero number for the offset distance.'
+          : result.reason === 'unsupported-orientation'
+          ? 'Only straight horizontal or vertical walls can be offset.'
+          : 'We could not create the offset wall. Try again.';
+      showCommandHint(message, 'error');
+    }
   });
 }
 

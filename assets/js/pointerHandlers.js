@@ -115,7 +115,9 @@ export function setupPointerHandlers(canvas, drawing, callbacks) {
   function handlePointerDown(evt) {
     evt.preventDefault();
 
-    if (state.activeTool !== 'draw') {
+    const tool = state.activeTool || 'draw';
+
+    if (tool === 'window' || tool === 'door') {
       const point = drawing.pointFromEvent(evt);
       const wallIndex = drawing.findWallIndexNearPoint(point);
 
@@ -124,7 +126,7 @@ export function setupPointerHandlers(canvas, drawing, callbacks) {
         return;
       }
 
-      const preset = state.openingPresets ? state.openingPresets[state.activeTool] : null;
+      const preset = state.openingPresets ? state.openingPresets[tool] : null;
       if (!preset || !Number.isFinite(preset.width) || !Number.isFinite(preset.height)) {
         onToolFeedback({ type: 'error', message: 'Set valid dimensions before placing that opening.' });
         return;
@@ -144,7 +146,7 @@ export function setupPointerHandlers(canvas, drawing, callbacks) {
       const pointerCoord = isHorizontal ? point.x : point.y;
       const position = (pointerCoord - startPx) / wallLengthPx;
       const result = addOpeningToWall(wallIndex, {
-        type: state.activeTool,
+        type: tool,
         position,
         width: preset.width,
         height: preset.height,
@@ -158,7 +160,7 @@ export function setupPointerHandlers(canvas, drawing, callbacks) {
         drawing.draw();
         onToolFeedback({
           type: 'success',
-          message: state.activeTool === 'door' ? 'Door added to the selected wall.' : 'Window added to the selected wall.',
+          message: tool === 'door' ? 'Door added to the selected wall.' : 'Window added to the selected wall.',
         });
       } else {
         const message =
@@ -166,10 +168,49 @@ export function setupPointerHandlers(canvas, drawing, callbacks) {
             ? 'This wall is too short for that opening. Try a longer wall.'
             : result.reason === 'missing-dimensions'
             ? 'Opening dimensions are missing. Re-open the tool to set them.'
+            : result.reason === 'overlap'
+            ? 'That placement overlaps another opening. Choose a different spot.'
             : 'Select a wall before placing an opening.';
         onToolFeedback({ type: 'error', message });
       }
 
+      return;
+    }
+
+    if (tool === 'move') {
+      if (pointerSession.active) return;
+
+      const point = drawing.pointFromEvent(evt);
+      const wallIndex = drawing.findWallIndexNearPoint(point, 12);
+
+      if (wallIndex == null) {
+        if (state.selectedWallIndex != null) {
+          state.selectedWallIndex = null;
+          onSelectionChanged();
+          drawing.draw();
+        }
+        onToolFeedback({ type: 'info', message: 'Click a wall to select it before dragging.' });
+        return;
+      }
+
+      state.selectedWallIndex = wallIndex;
+      onSelectionChanged();
+      drawing.draw();
+
+      pointerSession.active = true;
+      pointerSession.pointerId = evt.pointerId;
+      pointerSession.mode = 'drag-wall';
+      pointerSession.wallIndex = wallIndex;
+      pointerSession.initialWall = cloneWall(state.walls[wallIndex]);
+      pointerSession.startPoint = point;
+      pointerSession.startCell = null;
+      pointerSession.moved = false;
+
+      if (typeof canvas.setPointerCapture === 'function') {
+        canvas.setPointerCapture(evt.pointerId);
+      }
+
+      onToolFeedback({ type: 'info', message: 'Drag to reposition the selected wall.' });
       return;
     }
 
@@ -179,35 +220,25 @@ export function setupPointerHandlers(canvas, drawing, callbacks) {
     const wallIndex = drawing.findWallIndexNearPoint(point, 12);
 
     if (wallIndex != null) {
-      if (state.selectedWallIndex === wallIndex) {
-        pointerSession.active = true;
-        pointerSession.pointerId = evt.pointerId;
-        pointerSession.mode = 'drag-wall';
-        pointerSession.wallIndex = wallIndex;
-        pointerSession.initialWall = cloneWall(state.walls[wallIndex]);
-        pointerSession.startPoint = point;
-        pointerSession.startCell = null;
-        pointerSession.moved = false;
-      } else {
+      if (state.selectedWallIndex !== wallIndex) {
         state.selectedWallIndex = wallIndex;
         onSelectionChanged();
         drawing.draw();
-        onToolFeedback({ type: 'info', message: 'Wall selected. Drag again to move it.' });
-        return;
       }
-    } else {
-      const cell = drawing.cellFromEvent(evt);
-      pointerSession.active = true;
-      pointerSession.pointerId = evt.pointerId;
-      pointerSession.startCell = cell;
-      pointerSession.mode = 'new-wall';
-      pointerSession.startPoint = null;
-      pointerSession.moved = false;
-      state.isDrawing = false;
-      state.preview = null;
+      return;
     }
 
-    if (pointerSession.active && typeof canvas.setPointerCapture === 'function') {
+    const cell = drawing.cellFromEvent(evt);
+    pointerSession.active = true;
+    pointerSession.pointerId = evt.pointerId;
+    pointerSession.startCell = cell;
+    pointerSession.mode = 'new-wall';
+    pointerSession.startPoint = null;
+    pointerSession.moved = false;
+    state.isDrawing = false;
+    state.preview = null;
+
+    if (typeof canvas.setPointerCapture === 'function') {
       canvas.setPointerCapture(evt.pointerId);
     }
   }

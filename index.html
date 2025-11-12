@@ -28,6 +28,15 @@
           Draw walls
         </button>
         <button
+          id="moveToolButton"
+          class="command-button"
+          type="button"
+          data-tool="move"
+          aria-pressed="false"
+        >
+          Move walls
+        </button>
+        <button
           id="snapToggleButton"
           class="command-button command-button--ghost"
           type="button"
@@ -35,6 +44,7 @@
         >
           Wall snapping: On
         </button>
+        <button id="offsetWallButton" class="command-button" type="button" disabled>Offset wall</button>
         <button id="undoButton" class="command-button" type="button">Undo</button>
         <button id="eraseButton" class="command-button" type="button" disabled>Erase selected</button>
         <button id="clearButton" class="command-button" type="button">Clear plan</button>
@@ -130,7 +140,9 @@
           <div id="instructionsContent" class="instructions-card__body" role="region" aria-labelledby="instructionsHeading">
             <ol class="instructions-list">
               <li>Use <strong>Draw walls</strong> to drag horizontal or vertical walls on the grid.</li>
+              <li>Select <strong>Move walls</strong> to pick and drag an existing wall segment.</li>
               <li>Use <strong>Insert window</strong> or <strong>Insert door</strong> to add openings, then click a wall to place them.</li>
+              <li>Use <strong>Offset wall</strong> to duplicate the selected wall at a specified distance.</li>
               <li>Undo removes the latest wall, <strong>Erase selected</strong> deletes a chosen wall, <strong>Delete openings</strong> clears windows and doors on the selected wall, and <strong>Clear plan</strong> starts fresh.</li>
             </ol>
             <p class="helper-text">
