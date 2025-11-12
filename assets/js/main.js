@@ -554,11 +554,11 @@ function downloadPNG() {
 
   const legendItems = [
     {
-      label: 'Walls forming enclosed loop',
+      label: 'Walls forming closed loop (room/ house walls)',
       drawIcon: (ctx, x, y, size, scale) => drawLegendWall(ctx, x, y, size, scale, colors.wall || '#111827'),
     },
     {
-      label: 'Walls outside enclosed loop',
+      label: 'Walls not forming closed loop (room), stand alone wall',
       drawIcon: (ctx, x, y, size, scale) => drawLegendWall(ctx, x, y, size, scale, colors.wallOpen || '#dc2626'),
     },
     {
