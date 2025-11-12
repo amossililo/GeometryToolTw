@@ -48,6 +48,10 @@ const instructionsToggle = document.getElementById('instructionsToggle');
 const instructionsCard = document.querySelector('.instructions-card');
 const instructionsContent = document.getElementById('instructionsContent');
 
+let instructionsCollapsedForMobile = true;
+const mobileInstructionsMedia =
+  typeof window.matchMedia === 'function' ? window.matchMedia('(max-width: 720px)') : null;
+
 const openingPrompt = document.getElementById('openingPrompt');
 const openingForm = document.getElementById('openingForm');
 const openingCancelButton = document.getElementById('openingCancel');
@@ -94,9 +98,6 @@ if (sheetsUrlInput && !sheetsUrlInput.value) {
   sheetsUrlInput.value = DEFAULT_SHEETS_WEB_APP_URL;
 }
 
-updateSnapToggleButton();
-applyInstructionsLayout();
-
 let sheetsExporter = null;
 let hintTimeout = null;
 let pendingOpeningType = null;
@@ -104,10 +105,9 @@ let lastOpeningTrigger = null;
 let lastFocusedBeforeBoq = null;
 let lastDownloadUrl = DEFAULT_BOQ_EXPORT_URL;
 let boqPollTimeout = null;
-let instructionsCollapsedForMobile = true;
 
-const mobileInstructionsMedia =
-  typeof window.matchMedia === 'function' ? window.matchMedia('(max-width: 720px)') : null;
+updateSnapToggleButton();
+applyInstructionsLayout();
 
 function formatNumber(value) {
   if (!Number.isFinite(value)) return '';
