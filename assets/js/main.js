@@ -1,4 +1,4 @@
-import { state } from './state.js';
+import { state, colors } from './state.js';
 import { createCanvasDrawing } from './canvasDrawing.js';
 import { setupPointerHandlers } from './pointerHandlers.js';
 import { createWallActions } from './wallActions.js';
@@ -403,11 +403,243 @@ const wallActions = createWallActions({
   onSelectionChanged: handleSelectionChanged,
 });
 
+function drawLegendWall(ctx, x, y, size, dpr, color) {
+  const centerY = y + size / 2;
+  const padding = size * 0.15;
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(size * 0.12, 4 * dpr);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x + padding, centerY);
+  ctx.lineTo(x + size - padding, centerY);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawLegendDoor(ctx, x, y, size, dpr) {
+  const hingeX = x + size * 0.2;
+  const hingeY = y + size * 0.75;
+  const swing = size * 0.65;
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(hingeX, hingeY);
+  ctx.lineTo(hingeX + swing, hingeY);
+  ctx.lineTo(hingeX, hingeY - swing);
+  ctx.closePath();
+  ctx.fillStyle = colors.doorLeaf || '#f59e0b';
+  ctx.globalAlpha = 0.25;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = colors.doorSwing || '#b45309';
+  ctx.lineWidth = Math.max(2 * dpr, size * 0.08);
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(hingeX, hingeY);
+  ctx.lineTo(hingeX, hingeY - swing);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawLegendWindow(ctx, x, y, size, dpr) {
+  const padding = size * 0.18;
+  const width = size - padding * 2;
+  const height = width;
+  const left = x + padding;
+  const top = y + (size - height) / 2;
+  ctx.save();
+  ctx.fillStyle = colors.windowFill || 'rgba(14,165,233,0.35)';
+  ctx.strokeStyle = colors.windowStroke || '#0284c7';
+  ctx.lineWidth = Math.max(2 * dpr, size * 0.08);
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.rect(left, top, width, height);
+  ctx.fill();
+  ctx.stroke();
+  ctx.strokeStyle = colors.windowCrossbar || ctx.strokeStyle;
+  ctx.lineWidth = Math.max(1.5 * dpr, size * 0.06);
+  ctx.beginPath();
+  ctx.moveTo(left, top + height / 2);
+  ctx.lineTo(left + width, top + height / 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(left + width / 2, top);
+  ctx.lineTo(left + width / 2, top + height);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawLegendGrid(ctx, x, y, size, dpr) {
+  const cell = size / 3;
+  ctx.save();
+  ctx.strokeStyle = colors.grid || '#d1d5db';
+  ctx.lineWidth = Math.max(dpr, size * 0.03);
+  ctx.beginPath();
+  for (let i = 0; i <= 3; i += 1) {
+    const offset = x + i * cell;
+    ctx.moveTo(offset, y);
+    ctx.lineTo(offset, y + size);
+  }
+  for (let i = 0; i <= 3; i += 1) {
+    const offset = y + i * cell;
+    ctx.moveTo(x, offset);
+    ctx.lineTo(x + size, offset);
+  }
+  ctx.stroke();
+  ctx.strokeStyle = colors.gridBold || '#9ca3af';
+  ctx.lineWidth = Math.max(dpr, size * 0.04);
+  ctx.beginPath();
+  ctx.moveTo(x + cell, y);
+  ctx.lineTo(x + cell, y + size);
+  ctx.moveTo(x + 2 * cell, y);
+  ctx.lineTo(x + 2 * cell, y + size);
+  ctx.moveTo(x, y + cell);
+  ctx.lineTo(x + size, y + cell);
+  ctx.moveTo(x, y + 2 * cell);
+  ctx.lineTo(x + size, y + 2 * cell);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawLegendEndpoint(ctx, x, y, size, dpr) {
+  const radius = size * 0.22;
+  const centerX = x + size / 2;
+  const centerY = y + size / 2;
+  ctx.save();
+  ctx.fillStyle = colors.wallOpen || '#dc2626';
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = Math.max(1.5 * dpr, size * 0.05);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawLegendMeasurement(ctx, x, y, size, dpr) {
+  const lineY = y + size * 0.7;
+  const padding = size * 0.1;
+  ctx.save();
+  ctx.strokeStyle = colors.wall || '#111827';
+  ctx.lineWidth = Math.max(4 * dpr, size * 0.1);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x + padding, lineY);
+  ctx.lineTo(x + size - padding, lineY);
+  ctx.stroke();
+  ctx.fillStyle = colors.wallText || 'rgba(17,24,39,0.85)';
+  ctx.font = `${Math.max(12 * dpr, size * 0.32)}px "Inter", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('3 m', x + size / 2, y + size * 0.35);
+  ctx.restore();
+}
+
 function downloadPNG() {
   if (!canvas) return;
+  if (drawing && typeof drawing.draw === 'function') {
+    drawing.draw();
+  }
+
+  const dpr = window.devicePixelRatio || 1;
+  const baseWidth = canvas.width;
+  const baseHeight = canvas.height;
+  const legendPadding = Math.round(28 * dpr);
+  const headingSize = Math.round(22 * dpr);
+  const headingSpacing = Math.round(12 * dpr);
+  const iconSize = Math.round(36 * dpr);
+  const rowGap = Math.round(16 * dpr);
+  const textGap = Math.round(16 * dpr);
+
+  const legendItems = [
+    {
+      label: 'Walls forming closed loop (room/ house walls)',
+      drawIcon: (ctx, x, y, size, scale) => drawLegendWall(ctx, x, y, size, scale, colors.wall || '#111827'),
+    },
+    {
+      label: 'Walls not forming closed loop (room), stand alone wall',
+      drawIcon: (ctx, x, y, size, scale) => drawLegendWall(ctx, x, y, size, scale, colors.wallOpen || '#dc2626'),
+    },
+    {
+      label: 'Door',
+      drawIcon: drawLegendDoor,
+    },
+    {
+      label: 'Window',
+      drawIcon: drawLegendWindow,
+    },
+    {
+      label: 'Measurement label',
+      drawIcon: drawLegendMeasurement,
+    },
+    {
+      label: 'Open endpoint or gap',
+      drawIcon: drawLegendEndpoint,
+    },
+    {
+      label: 'Grid lines',
+      drawIcon: drawLegendGrid,
+    },
+  ];
+
+  const legendHeight =
+    legendPadding * 2 +
+    headingSize +
+    headingSpacing +
+    legendItems.length * iconSize +
+    Math.max(0, legendItems.length - 1) * rowGap;
+
+  const outputCanvas = document.createElement('canvas');
+  outputCanvas.width = baseWidth;
+  outputCanvas.height = baseHeight + legendHeight;
+  const ctx = outputCanvas.getContext('2d');
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, outputCanvas.width, outputCanvas.height);
+  ctx.drawImage(canvas, 0, 0);
+
+  const legendTop = baseHeight;
+  const separatorY = legendTop + Math.round(legendPadding * 0.4);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(17,24,39,0.12)';
+  ctx.lineWidth = Math.max(1, Math.round(dpr));
+  ctx.beginPath();
+  ctx.moveTo(legendPadding, separatorY);
+  ctx.lineTo(baseWidth - legendPadding, separatorY);
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.save();
+  ctx.fillStyle = '#111827';
+  ctx.font = `600 ${headingSize}px "Inter", sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText('Key', legendPadding, legendTop + legendPadding);
+  ctx.restore();
+
+  let cursorY = legendTop + legendPadding + headingSize + headingSpacing;
+  const textX = legendPadding + iconSize + textGap;
+  const textFontSize = Math.max(16 * dpr, Math.round(iconSize * 0.42));
+
+  legendItems.forEach((item) => {
+    const iconTop = cursorY;
+    item.drawIcon(ctx, legendPadding, iconTop, iconSize, dpr);
+
+    ctx.save();
+    ctx.fillStyle = '#111827';
+    ctx.font = `${textFontSize}px "Inter", sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(item.label, textX, iconTop + iconSize / 2);
+    ctx.restore();
+
+    cursorY += iconSize + rowGap;
+  });
+
   const link = document.createElement('a');
   link.download = 'house-plan.png';
-  link.href = canvas.toDataURL('image/png');
+  link.href = outputCanvas.toDataURL('image/png');
   link.click();
 }
 
