@@ -35,8 +35,11 @@ export const colors = {
   wallActive: '#2563eb',
   wallOpen: '#dc2626',
   wallText: 'rgba(17,24,39,0.85)',
-  window: '#0ea5e9',
-  door: '#b45309',
+  windowStroke: '#0284c7',
+  windowFill: 'rgba(14,165,233,0.35)',
+  windowCrossbar: '#0ea5e9',
+  doorLeaf: '#f59e0b',
+  doorSwing: '#b45309',
 };
 
 export function resetPointerSession() {

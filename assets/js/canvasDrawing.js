@@ -169,6 +169,9 @@ export function createCanvasDrawing(canvas) {
         const isHorizontal = px.y1 === px.y2;
         const wallLengthPx = isHorizontal ? Math.abs(px.x2 - px.x1) : Math.abs(px.y2 - px.y1);
         const startPx = isHorizontal ? Math.min(px.x1, px.x2) : Math.min(px.y1, px.y2);
+        const orientationForward = isHorizontal ? px.x2 >= px.x1 : px.y2 >= px.y1;
+        const baseLineWidth = isSelected ? 3 : 2;
+
         features.forEach((feature) => {
           if (!feature) return;
           const featureLengthPx = Math.min((feature.lengthCells ?? 1) * state.gridSize, wallLengthPx);
@@ -178,20 +181,140 @@ export function createCanvasDrawing(canvas) {
           const segmentEnd = Math.min(startPx + wallLengthPx, center + featureLengthPx / 2);
           if (segmentEnd <= segmentStart) return;
 
-          ctx.save();
-          ctx.strokeStyle = feature.type === 'door' ? colors.door : colors.window;
-          ctx.lineWidth = isSelected ? 8 : 6;
-          ctx.lineCap = 'round';
-          ctx.beginPath();
-          if (isHorizontal) {
-            ctx.moveTo(segmentStart, px.y1);
-            ctx.lineTo(segmentEnd, px.y1);
+          const span = segmentEnd - segmentStart;
+          const spanAbs = Math.abs(span);
+          if (!(spanAbs > 0)) return;
+
+          if (feature.type === 'door') {
+            const doorReach = Math.max(Math.min(spanAbs, state.gridSize * 4), state.gridSize * 0.9);
+            const hingeCoord = orientationForward ? segmentStart : segmentEnd;
+            const sweepDir = orientationForward ? 1 : -1;
+            const doorLeafColor = colors.doorLeaf || '#f59e0b';
+            const doorSwingColor = colors.doorSwing || '#b45309';
+
+            if (isHorizontal) {
+              const hingeX = hingeCoord;
+              const baseY = px.y1;
+
+              ctx.save();
+              ctx.beginPath();
+              ctx.moveTo(hingeX, baseY);
+              ctx.lineTo(hingeX + sweepDir * doorReach, baseY);
+              ctx.lineTo(hingeX, baseY + doorReach);
+              ctx.closePath();
+              ctx.fillStyle = doorLeafColor;
+              ctx.globalAlpha = 0.25;
+              ctx.fill();
+              ctx.globalAlpha = 1;
+              ctx.strokeStyle = doorSwingColor;
+              ctx.lineWidth = baseLineWidth;
+              ctx.lineJoin = 'round';
+              ctx.stroke();
+              ctx.restore();
+
+              ctx.save();
+              ctx.strokeStyle = doorSwingColor;
+              ctx.lineWidth = Math.max(1, baseLineWidth - 0.5);
+              ctx.beginPath();
+              ctx.moveTo(hingeX, baseY);
+              ctx.lineTo(hingeX, baseY + doorReach);
+              ctx.stroke();
+              ctx.restore();
+            } else {
+              const hingeY = hingeCoord;
+              const baseX = px.x1;
+
+              ctx.save();
+              ctx.beginPath();
+              ctx.moveTo(baseX, hingeY);
+              ctx.lineTo(baseX, hingeY + sweepDir * doorReach);
+              ctx.lineTo(baseX + doorReach, hingeY);
+              ctx.closePath();
+              ctx.fillStyle = doorLeafColor;
+              ctx.globalAlpha = 0.25;
+              ctx.fill();
+              ctx.globalAlpha = 1;
+              ctx.strokeStyle = doorSwingColor;
+              ctx.lineWidth = baseLineWidth;
+              ctx.lineJoin = 'round';
+              ctx.stroke();
+              ctx.restore();
+
+              ctx.save();
+              ctx.strokeStyle = doorSwingColor;
+              ctx.lineWidth = Math.max(1, baseLineWidth - 0.5);
+              ctx.beginPath();
+              ctx.moveTo(baseX, hingeY);
+              ctx.lineTo(baseX + doorReach, hingeY);
+              ctx.stroke();
+              ctx.restore();
+            }
           } else {
-            ctx.moveTo(px.x1, segmentStart);
-            ctx.lineTo(px.x1, segmentEnd);
+            const windowLength = Math.max(spanAbs, state.gridSize * 1.2);
+            const windowThickness = Math.max(
+              state.gridSize * 0.6,
+              Math.min(windowLength * 0.6, state.gridSize * 2.2)
+            );
+            const windowStroke = colors.windowStroke || '#0284c7';
+            const windowFill = colors.windowFill || 'rgba(14,165,233,0.35)';
+            const windowCrossbar = colors.windowCrossbar || windowStroke;
+
+            if (isHorizontal) {
+              const iconCenter = (segmentStart + segmentEnd) / 2;
+              const left = iconCenter - windowLength / 2;
+              const top = px.y1 - windowThickness / 2;
+
+              ctx.save();
+              ctx.fillStyle = windowFill;
+              ctx.strokeStyle = windowStroke;
+              ctx.lineWidth = baseLineWidth;
+              ctx.lineJoin = 'round';
+              ctx.beginPath();
+              ctx.rect(left, top, windowLength, windowThickness);
+              ctx.fill();
+              ctx.stroke();
+
+              ctx.strokeStyle = windowCrossbar;
+              ctx.lineWidth = Math.max(1, baseLineWidth - 0.5);
+              ctx.beginPath();
+              ctx.moveTo(left, px.y1);
+              ctx.lineTo(left + windowLength, px.y1);
+              ctx.stroke();
+
+              ctx.beginPath();
+              ctx.moveTo(iconCenter, top);
+              ctx.lineTo(iconCenter, top + windowThickness);
+              ctx.stroke();
+              ctx.restore();
+            } else {
+              const iconCenter = (segmentStart + segmentEnd) / 2;
+              const left = px.x1 - windowThickness / 2;
+              const top = iconCenter - windowLength / 2;
+
+              ctx.save();
+              ctx.fillStyle = windowFill;
+              ctx.strokeStyle = windowStroke;
+              ctx.lineWidth = baseLineWidth;
+              ctx.lineJoin = 'round';
+              ctx.beginPath();
+              ctx.rect(left, top, windowThickness, windowLength);
+              ctx.fill();
+              ctx.stroke();
+
+              ctx.strokeStyle = windowCrossbar;
+              ctx.lineWidth = Math.max(1, baseLineWidth - 0.5);
+              ctx.beginPath();
+              ctx.moveTo(px.x1, top);
+              ctx.lineTo(px.x1, top + windowLength);
+              ctx.stroke();
+
+              ctx.beginPath();
+              ctx.moveTo(left, iconCenter);
+              ctx.lineTo(left + windowThickness, iconCenter);
+              ctx.stroke();
+              ctx.restore();
+            }
           }
-          ctx.stroke();
-          ctx.restore();
         });
       }
 
