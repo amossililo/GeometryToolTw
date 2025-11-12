@@ -14,6 +14,7 @@ export const state = {
     window: { width: 1.5, height: 1.2 },
     door: { width: 0.9, height: 2 },
   },
+  snapToWalls: true,
 };
 
 export const pointerSession = {
@@ -21,6 +22,10 @@ export const pointerSession = {
   pointerId: null,
   startCell: null,
   moved: false,
+  mode: null,
+  wallIndex: null,
+  initialWall: null,
+  startPoint: null,
 };
 
 export const colors = {
@@ -39,6 +44,10 @@ export function resetPointerSession() {
   pointerSession.pointerId = null;
   pointerSession.startCell = null;
   pointerSession.moved = false;
+  pointerSession.mode = null;
+  pointerSession.wallIndex = null;
+  pointerSession.initialWall = null;
+  pointerSession.startPoint = null;
   state.isDrawing = false;
   state.preview = null;
 }

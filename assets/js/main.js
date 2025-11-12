@@ -23,6 +23,7 @@ const setupPanel = document.getElementById('setupPanel');
 const setupCloseButton = document.getElementById('setupClose');
 
 const drawToolButton = document.getElementById('drawToolButton');
+const moveToolButton = document.getElementById('moveToolButton');
 const windowToolButton = document.getElementById('windowToolButton');
 const doorToolButton = document.getElementById('doorToolButton');
 
@@ -32,6 +33,7 @@ const eraseButton = document.getElementById('eraseButton');
 const downloadButton = document.getElementById('downloadButton');
 const clearOpeningsButton = document.getElementById('clearOpeningsButton');
 const generateBoqButton = document.getElementById('generateBoqButton');
+const offsetWallButton = document.getElementById('offsetWallButton');
 
 const sheetsUrlInput = document.getElementById('sheetsUrl');
 const sheetsStatusEl = document.getElementById('sheetsStatus');
@@ -42,6 +44,15 @@ const unitPerCellInput = document.getElementById('unitPerCell');
 const gridSizeInput = document.getElementById('gridSize');
 
 const commandHintEl = document.getElementById('commandHint');
+
+const snapToggleButton = document.getElementById('snapToggleButton');
+const instructionsToggle = document.getElementById('instructionsToggle');
+const instructionsCard = document.querySelector('.instructions-card');
+const instructionsContent = document.getElementById('instructionsContent');
+
+let instructionsCollapsedForMobile = true;
+const mobileInstructionsMedia =
+  typeof window.matchMedia === 'function' ? window.matchMedia('(max-width: 720px)') : null;
 
 const openingPrompt = document.getElementById('openingPrompt');
 const openingForm = document.getElementById('openingForm');
@@ -64,7 +75,7 @@ const boqProgressSteps = boqPrompt
     }
   : {};
 
-const toolButtons = [drawToolButton, windowToolButton, doorToolButton].filter(Boolean);
+const toolButtons = [drawToolButton, moveToolButton, windowToolButton, doorToolButton].filter(Boolean);
 
 const drawing = createCanvasDrawing(canvas);
 const metricsManager = createMetricsManager({
@@ -97,6 +108,9 @@ let lastFocusedBeforeBoq = null;
 let lastDownloadUrl = DEFAULT_BOQ_EXPORT_URL;
 let boqPollTimeout = null;
 
+updateSnapToggleButton();
+applyInstructionsLayout();
+
 function formatNumber(value) {
   if (!Number.isFinite(value)) return '';
   const rounded = Math.round(value * 100) / 100;
@@ -128,6 +142,11 @@ function updateClearOpeningsButton() {
   clearOpeningsButton.disabled = !selectedWallHasOpenings();
 }
 
+function updateOffsetButton() {
+  if (!offsetWallButton) return;
+  offsetWallButton.disabled = state.selectedWallIndex == null;
+}
+
 function updateToolStates(activeTool) {
   toolButtons.forEach((button) => {
     if (!button || !button.dataset.tool) return;
@@ -137,12 +156,56 @@ function updateToolStates(activeTool) {
   });
 }
 
+function updateSnapToggleButton() {
+  if (!snapToggleButton) return;
+  snapToggleButton.classList.toggle('is-active', state.snapToWalls);
+  snapToggleButton.setAttribute('aria-pressed', String(state.snapToWalls));
+  snapToggleButton.textContent = state.snapToWalls ? 'Wall snapping: On' : 'Wall snapping: Off';
+}
+
+function setInstructionsCollapsed(collapsed, options = {}) {
+  if (!instructionsCard || !instructionsContent || !instructionsToggle) return;
+  const { skipStore = false } = options;
+  instructionsCard.dataset.collapsed = collapsed ? 'true' : 'false';
+  if (collapsed) {
+    instructionsContent.setAttribute('hidden', '');
+  } else {
+    instructionsContent.removeAttribute('hidden');
+  }
+  instructionsToggle.setAttribute('aria-expanded', String(!collapsed));
+  instructionsToggle.textContent = collapsed ? 'Show help' : 'Hide help';
+  if (!skipStore) {
+    instructionsCollapsedForMobile = collapsed;
+  }
+}
+
+function applyInstructionsLayout() {
+  if (!instructionsCard || !instructionsContent || !instructionsToggle) return;
+  if (!mobileInstructionsMedia) {
+    instructionsToggle.hidden = true;
+    setInstructionsCollapsed(false, { skipStore: true });
+    return;
+  }
+  if (mobileInstructionsMedia.matches) {
+    instructionsToggle.hidden = false;
+    setInstructionsCollapsed(instructionsCollapsedForMobile, { skipStore: true });
+  } else {
+    instructionsToggle.hidden = true;
+    setInstructionsCollapsed(false, { skipStore: true });
+  }
+}
+
 function setActiveTool(tool) {
   state.activeTool = tool;
   updateToolStates(tool);
 
   if (tool === 'draw') {
     showCommandHint('Drag on the grid to create new walls.', 'info');
+    return;
+  }
+
+  if (tool === 'move') {
+    showCommandHint('Click a wall, then drag to reposition it. Use Draw walls to sketch new segments.', 'info');
     return;
   }
 
@@ -312,6 +375,7 @@ function handleWallsChanged() {
   const metrics = metricsManager.updateMetrics();
   updateEraseButton();
   updateClearOpeningsButton();
+  updateOffsetButton();
   drawing.draw();
 
   if (sheetsExporter && typeof sheetsExporter.setLatestMetrics === 'function') {
@@ -322,6 +386,7 @@ function handleWallsChanged() {
 function handleSelectionChanged() {
   updateEraseButton();
   updateClearOpeningsButton();
+  updateOffsetButton();
 }
 
 setupPointerHandlers(canvas, drawing, {
@@ -396,10 +461,43 @@ document.addEventListener('click', (evt) => {
   closeSetupPanel();
 });
 
+if (snapToggleButton) {
+  snapToggleButton.addEventListener('click', () => {
+    state.snapToWalls = !state.snapToWalls;
+    updateSnapToggleButton();
+    showCommandHint(
+      state.snapToWalls
+        ? 'Wall snapping enabled. Dragged walls will attach to nearby ends.'
+        : 'Wall snapping disabled. Walls will move freely.',
+      'info'
+    );
+  });
+}
+
+if (instructionsToggle) {
+  instructionsToggle.addEventListener('click', () => {
+    const isCollapsed = instructionsCard?.dataset.collapsed === 'true';
+    setInstructionsCollapsed(!isCollapsed);
+  });
+}
+
+if (typeof mobileInstructionsMedia?.addEventListener === 'function') {
+  mobileInstructionsMedia.addEventListener('change', applyInstructionsLayout);
+} else if (typeof mobileInstructionsMedia?.addListener === 'function') {
+  mobileInstructionsMedia.addListener(applyInstructionsLayout);
+}
+
 if (drawToolButton) {
   drawToolButton.addEventListener('click', () => {
     closeOpeningPrompt({ focusTrigger: false });
     setActiveTool('draw');
+  });
+}
+
+if (moveToolButton) {
+  moveToolButton.addEventListener('click', () => {
+    closeOpeningPrompt({ focusTrigger: false });
+    setActiveTool('move');
   });
 }
 
@@ -533,7 +631,81 @@ if (clearOpeningsButton) {
       showCommandHint('Select a wall with windows or doors to clear them.', 'info');
     }
     updateClearOpeningsButton();
+    updateOffsetButton();
     drawing.draw();
+  });
+}
+
+if (offsetWallButton) {
+  offsetWallButton.addEventListener('click', () => {
+    const selectedIndex = state.selectedWallIndex;
+    if (selectedIndex == null) {
+      showCommandHint('Select a wall before using Offset wall.', 'info');
+      return;
+    }
+
+    const wall = state.walls[selectedIndex];
+    if (!wall) {
+      showCommandHint('The selected wall could not be found. Try selecting it again.', 'error');
+      updateOffsetButton();
+      return;
+    }
+
+    const unitLabel = state.unitLabel || 'units';
+    const unitPerCell = Number.isFinite(state.unitPerCell) && state.unitPerCell > 0 ? state.unitPerCell : 1;
+    const defaultDistance = unitPerCell;
+    const response = window.prompt(
+      `How far should we offset the wall? Enter a distance in ${unitLabel} (multiples of ${formatNumber(
+        unitPerCell
+      )} ${unitLabel}). Use negative values to offset in the opposite direction.`,
+      formatNumber(defaultDistance)
+    );
+
+    if (response == null) {
+      return;
+    }
+
+    const offsetUnits = Number(response);
+    if (!Number.isFinite(offsetUnits) || offsetUnits === 0) {
+      showCommandHint('Enter a non-zero number for the offset distance.', 'error');
+      return;
+    }
+
+    const offsetCellsRaw = offsetUnits / unitPerCell;
+    if (!Number.isFinite(offsetCellsRaw)) {
+      showCommandHint('Enter a valid number for the offset distance.', 'error');
+      return;
+    }
+
+    const offsetCells = Math.round(offsetCellsRaw);
+    if (offsetCells === 0) {
+      showCommandHint('The offset must be at least half a grid square.', 'error');
+      return;
+    }
+
+    const snapped = Math.abs(offsetCellsRaw - offsetCells) > 1e-6;
+    const result = wallActions.offsetSelected(offsetCells);
+
+    if (result.success) {
+      const distanceUnits = Math.abs(offsetCells) * unitPerCell;
+      const distanceLabel = formatNumber(distanceUnits);
+      const message = snapped
+        ? `Offset wall created ${distanceLabel} ${unitLabel} away (snapped to the nearest grid line).`
+        : `Offset wall created ${distanceLabel} ${unitLabel} away.`;
+      showCommandHint(message, 'success');
+      updateOffsetButton();
+      drawing.draw();
+    } else {
+      const message =
+        result.reason === 'no-selection'
+          ? 'Select a wall before using Offset wall.'
+          : result.reason === 'invalid-offset'
+          ? 'Enter a non-zero number for the offset distance.'
+          : result.reason === 'unsupported-orientation'
+          ? 'Only straight horizontal or vertical walls can be offset.'
+          : 'We could not create the offset wall. Try again.';
+      showCommandHint(message, 'error');
+    }
   });
 }
 
@@ -598,12 +770,6 @@ if (
           'Engineers are compiling your BOQ. We will check back for the download link in about 3 seconds.';
       }
 
-      if (boqDownloadButton) {
-        boqDownloadButton.disabled = false;
-        boqDownloadButton.removeAttribute('hidden');
-        boqDownloadButton.textContent = 'Open BOQ link';
-      }
-
       if (boqResponsePreview) {
         boqResponsePreview.textContent = '';
         boqResponsePreview.setAttribute('hidden', '');
@@ -648,12 +814,22 @@ if (
               boqPromptDescription.textContent =
                 'Engineers compiled the BOQ. Review the response below and open the link when you are ready.';
             }
+            if (boqDownloadButton) {
+              boqDownloadButton.disabled = false;
+              boqDownloadButton.removeAttribute('hidden');
+              boqDownloadButton.textContent = 'Open BOQ link';
+            }
             showCommandHint('BOQ response received. Use the link button to open it when ready.', 'success');
           } else {
             updateBoqProgress('compile', 'error');
             if (boqPromptDescription) {
               boqPromptDescription.textContent =
                 'We received a response, but it indicated an error. Review the details below.';
+            }
+            if (boqDownloadButton) {
+              boqDownloadButton.disabled = false;
+              boqDownloadButton.removeAttribute('hidden');
+              boqDownloadButton.textContent = 'Open BOQ link';
             }
             showCommandHint('The BOQ export returned an error response. Review the details shown.', 'error');
           }
@@ -667,6 +843,11 @@ if (
           if (boqPromptDescription) {
             boqPromptDescription.textContent =
               'We could not fetch the BOQ response automatically. Use the link button to try manually.';
+          }
+          if (boqDownloadButton) {
+            boqDownloadButton.disabled = false;
+            boqDownloadButton.removeAttribute('hidden');
+            boqDownloadButton.textContent = 'Open BOQ link';
           }
           showCommandHint('We could not fetch the BOQ response automatically. Try the link button.', 'error');
         }
