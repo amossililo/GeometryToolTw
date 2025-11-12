@@ -152,6 +152,11 @@ input:focus {
   transform: none;
 }
 
+.command-button.command-button--ghost.is-active {
+  background: var(--accent);
+  color: #fff;
+}
+
 .command-button--secondary {
   background: #e5e7eb;
   color: var(--ink);
@@ -309,6 +314,34 @@ aside p {
   line-height: 1.4;
 }
 
+.instructions-card__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.instructions-card__toggle {
+  margin-left: auto;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: var(--ink);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 4px 12px;
+  cursor: pointer;
+  display: none;
+}
+
+.instructions-card__toggle:hover {
+  background: #f3f4f6;
+}
+
+.instructions-card__body {
+  display: grid;
+  gap: 10px;
+}
+
 .instructions-list {
   margin: 0;
   padding-left: 1.1rem;
@@ -346,30 +379,30 @@ canvas {
   background: rgba(17, 24, 39, 0.82);
   color: #f9fafb;
   border-radius: 18px;
-  padding: 16px;
-  width: min(240px, 38%);
+  padding: 12px;
+  width: min(200px, 32%);
   display: grid;
-  gap: 12px;
-  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.25);
+  gap: 10px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.22);
 }
 
 .metrics-overlay h2 {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.85rem;
   font-weight: 600;
 }
 
 .metrics {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 10px;
+  gap: 8px;
 }
 
 .metric {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 0.82rem;
+  font-size: 0.75rem;
   color: rgba(248, 250, 252, 0.85);
 }
 
@@ -378,14 +411,14 @@ canvas {
 }
 
 .metric span {
-  font-size: 1.15rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: #fff;
 }
 
 .overlay-note {
   margin: 0;
-  font-size: 0.78rem;
+  font-size: 0.7rem;
   color: rgba(248, 250, 252, 0.85);
 }
 
@@ -549,6 +582,10 @@ canvas {
   .canvas-wrapper {
     padding-bottom: 16px;
   }
+
+  .metrics {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
 }
 
 @media (max-width: 880px) {
@@ -559,11 +596,27 @@ canvas {
   aside {
     border-right: none;
     border-bottom: 1px solid #e5e7eb;
-    max-height: 260px;
+    max-height: none;
   }
 
   main {
     min-height: 60vh;
+  }
+}
+
+@media (max-width: 720px) {
+  .instructions-card__toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .instructions-card[data-collapsed='true'] .instructions-card__body {
+    display: none;
+  }
+
+  .instructions-card[data-collapsed='true'] {
+    padding-bottom: 12px;
   }
 }
 
@@ -586,6 +639,6 @@ canvas {
   }
 
   .metrics-overlay {
-    padding: 16px;
+    padding: 12px;
   }
 }

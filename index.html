@@ -27,6 +27,14 @@
         >
           Draw walls
         </button>
+        <button
+          id="snapToggleButton"
+          class="command-button command-button--ghost"
+          type="button"
+          aria-pressed="true"
+        >
+          Wall snapping: On
+        </button>
         <button id="undoButton" class="command-button" type="button">Undo</button>
         <button id="eraseButton" class="command-button" type="button" disabled>Erase selected</button>
         <button id="clearButton" class="command-button" type="button">Clear plan</button>
@@ -106,16 +114,29 @@
           </p>
         </header>
 
-        <div class="card instructions-card" aria-label="Drawing instructions">
-          <strong>How to work</strong>
-          <ol class="instructions-list">
-            <li>Use <strong>Draw walls</strong> to drag horizontal or vertical walls on the grid.</li>
-            <li>Use <strong>Insert window</strong> or <strong>Insert door</strong> to add openings, then click a wall to place them.</li>
-            <li>Undo removes the latest wall, <strong>Erase selected</strong> deletes a chosen wall, <strong>Delete openings</strong> clears windows and doors on the selected wall, and <strong>Clear plan</strong> starts fresh.</li>
-          </ol>
-          <p class="helper-text">
-            Adjust grid spacing and units from the Drawing setup panel to match your project scale.
-          </p>
+        <div class="card instructions-card" aria-label="Drawing instructions" data-collapsed="false">
+          <div class="instructions-card__header">
+            <strong id="instructionsHeading">How to work</strong>
+            <button
+              id="instructionsToggle"
+              class="instructions-card__toggle"
+              type="button"
+              aria-expanded="true"
+              aria-controls="instructionsContent"
+            >
+              Hide help
+            </button>
+          </div>
+          <div id="instructionsContent" class="instructions-card__body" role="region" aria-labelledby="instructionsHeading">
+            <ol class="instructions-list">
+              <li>Use <strong>Draw walls</strong> to drag horizontal or vertical walls on the grid.</li>
+              <li>Use <strong>Insert window</strong> or <strong>Insert door</strong> to add openings, then click a wall to place them.</li>
+              <li>Undo removes the latest wall, <strong>Erase selected</strong> deletes a chosen wall, <strong>Delete openings</strong> clears windows and doors on the selected wall, and <strong>Clear plan</strong> starts fresh.</li>
+            </ol>
+            <p class="helper-text">
+              Adjust grid spacing and units from the Drawing setup panel to match your project scale.
+            </p>
+          </div>
         </div>
 
       </aside>

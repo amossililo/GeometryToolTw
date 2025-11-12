@@ -18,6 +18,100 @@ export function setupPointerHandlers(canvas, drawing, callbacks) {
     }
   }
 
+  function cloneWall(wall) {
+    if (!wall) return null;
+    const features = Array.isArray(wall.features)
+      ? wall.features.map((feature) => ({ ...feature }))
+      : [];
+    return { ...wall, features };
+  }
+
+  function snapWallToNeighbors(wall, wallIndex) {
+    if (!state.snapToWalls || !wall) return wall;
+
+    const endpoints = [];
+    state.walls.forEach((candidate, index) => {
+      if (!candidate || index === wallIndex) return;
+      endpoints.push({ x: candidate.x1, y: candidate.y1 });
+      endpoints.push({ x: candidate.x2, y: candidate.y2 });
+    });
+
+    if (!endpoints.length) return wall;
+
+    const isHorizontal = wall.y1 === wall.y2;
+    const isVertical = wall.x1 === wall.x2;
+    if (!isHorizontal && !isVertical) return wall;
+
+    const threshold = 0.75;
+
+    const findSnap = (target, axis, axisValue) => {
+      let best = null;
+      let bestDist = Infinity;
+      for (const endpoint of endpoints) {
+        if (axis === 'y' && Math.abs(endpoint.y - axisValue) > threshold) continue;
+        if (axis === 'x' && Math.abs(endpoint.x - axisValue) > threshold) continue;
+        const dist = Math.hypot(endpoint.x - target.x, endpoint.y - target.y);
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = endpoint;
+        }
+      }
+      if (!best || bestDist > threshold) return null;
+      return best;
+    };
+
+    const result = {
+      ...wall,
+      features: Array.isArray(wall.features)
+        ? wall.features.map((feature) => ({ ...feature }))
+        : [],
+    };
+
+    if (isHorizontal) {
+      let axisValue = wall.y1;
+      const startSnap = findSnap({ x: wall.x1, y: wall.y1 }, 'y', axisValue);
+      if (startSnap) {
+        result.x1 = Math.round(startSnap.x);
+        axisValue = Math.round(startSnap.y);
+      }
+
+      const endSnap = findSnap({ x: wall.x2, y: wall.y2 }, 'y', axisValue);
+      if (endSnap) {
+        result.x2 = Math.round(endSnap.x);
+        axisValue = Math.round(endSnap.y);
+      }
+
+      result.y1 = axisValue;
+      result.y2 = axisValue;
+    } else if (isVertical) {
+      let axisValue = wall.x1;
+      const startSnap = findSnap({ x: wall.x1, y: wall.y1 }, 'x', axisValue);
+      if (startSnap) {
+        result.y1 = Math.round(startSnap.y);
+        axisValue = Math.round(startSnap.x);
+      }
+
+      const endSnap = findSnap({ x: wall.x2, y: wall.y2 }, 'x', axisValue);
+      if (endSnap) {
+        result.y2 = Math.round(endSnap.y);
+        axisValue = Math.round(endSnap.x);
+      }
+
+      result.x1 = axisValue;
+      result.x2 = axisValue;
+    }
+
+    return result;
+  }
+
+  function revertWallDrag() {
+    if (pointerSession.mode !== 'drag-wall' || pointerSession.wallIndex == null) return;
+    const original = pointerSession.initialWall;
+    if (!original) return;
+    state.walls[pointerSession.wallIndex] = cloneWall(original);
+    drawing.draw();
+  }
+
   function handlePointerDown(evt) {
     evt.preventDefault();
 
@@ -80,15 +174,40 @@ export function setupPointerHandlers(canvas, drawing, callbacks) {
     }
 
     if (pointerSession.active) return;
-    const cell = drawing.cellFromEvent(evt);
-    pointerSession.active = true;
-    pointerSession.pointerId = evt.pointerId;
-    pointerSession.startCell = cell;
-    pointerSession.moved = false;
-    state.isDrawing = false;
-    state.preview = null;
 
-    if (typeof canvas.setPointerCapture === 'function') {
+    const point = drawing.pointFromEvent(evt);
+    const wallIndex = drawing.findWallIndexNearPoint(point, 12);
+
+    if (wallIndex != null) {
+      if (state.selectedWallIndex === wallIndex) {
+        pointerSession.active = true;
+        pointerSession.pointerId = evt.pointerId;
+        pointerSession.mode = 'drag-wall';
+        pointerSession.wallIndex = wallIndex;
+        pointerSession.initialWall = cloneWall(state.walls[wallIndex]);
+        pointerSession.startPoint = point;
+        pointerSession.startCell = null;
+        pointerSession.moved = false;
+      } else {
+        state.selectedWallIndex = wallIndex;
+        onSelectionChanged();
+        drawing.draw();
+        onToolFeedback({ type: 'info', message: 'Wall selected. Drag again to move it.' });
+        return;
+      }
+    } else {
+      const cell = drawing.cellFromEvent(evt);
+      pointerSession.active = true;
+      pointerSession.pointerId = evt.pointerId;
+      pointerSession.startCell = cell;
+      pointerSession.mode = 'new-wall';
+      pointerSession.startPoint = null;
+      pointerSession.moved = false;
+      state.isDrawing = false;
+      state.preview = null;
+    }
+
+    if (pointerSession.active && typeof canvas.setPointerCapture === 'function') {
       canvas.setPointerCapture(evt.pointerId);
     }
   }
@@ -96,6 +215,51 @@ export function setupPointerHandlers(canvas, drawing, callbacks) {
   function handlePointerMove(evt) {
     if (!pointerSession.active || evt.pointerId !== pointerSession.pointerId) return;
     evt.preventDefault();
+    if (pointerSession.mode === 'drag-wall') {
+      if (!pointerSession.initialWall || pointerSession.wallIndex == null) return;
+      const point = drawing.pointFromEvent(evt);
+      const startPoint = pointerSession.startPoint || point;
+      const dxPx = point.x - startPoint.x;
+      const dyPx = point.y - startPoint.y;
+      const dxCells = Math.round(dxPx / state.gridSize);
+      const dyCells = Math.round(dyPx / state.gridSize);
+
+      if (dxCells === 0 && dyCells === 0) {
+        if (pointerSession.moved) {
+          revertWallDrag();
+        }
+        return;
+      }
+
+      pointerSession.moved = true;
+      const initial = pointerSession.initialWall;
+      const wall = cloneWall(initial);
+      if (!wall) return;
+
+      if (initial.y1 === initial.y2) {
+        wall.x1 = initial.x1 + dxCells;
+        wall.x2 = initial.x2 + dxCells;
+        const newY = initial.y1 + dyCells;
+        wall.y1 = newY;
+        wall.y2 = newY;
+      } else if (initial.x1 === initial.x2) {
+        const newX = initial.x1 + dxCells;
+        wall.x1 = newX;
+        wall.x2 = newX;
+        wall.y1 = initial.y1 + dyCells;
+        wall.y2 = initial.y2 + dyCells;
+      } else {
+        wall.x1 = initial.x1 + dxCells;
+        wall.x2 = initial.x2 + dxCells;
+        wall.y1 = initial.y1 + dyCells;
+        wall.y2 = initial.y2 + dyCells;
+      }
+
+      const snapped = snapWallToNeighbors(wall, pointerSession.wallIndex);
+      state.walls[pointerSession.wallIndex] = snapped;
+      drawing.draw();
+      return;
+    }
     const currentCell = drawing.cellFromEvent(evt);
     const dx = currentCell.col - pointerSession.startCell.col;
     const dy = currentCell.row - pointerSession.startCell.row;
@@ -135,18 +299,28 @@ export function setupPointerHandlers(canvas, drawing, callbacks) {
     if (!pointerSession.active || evt.pointerId !== pointerSession.pointerId) return;
     evt.preventDefault();
 
-    if (state.isDrawing && state.preview) {
-      state.walls.push({ ...state.preview, features: [] });
-      state.preview = null;
-      state.selectedWallIndex = null;
-      onWallsChanged();
-    } else if (!state.isDrawing && !pointerSession.moved) {
-      const point = drawing.pointFromEvent(evt);
-      drawing.selectWallAtPoint(point);
-      onSelectionChanged();
-      drawing.draw();
-    } else if (state.isDrawing && !state.preview) {
-      drawing.draw();
+    if (pointerSession.mode === 'drag-wall') {
+      if (!pointerSession.moved) {
+        drawing.selectWallAtPoint(drawing.pointFromEvent(evt));
+        onSelectionChanged();
+        drawing.draw();
+      } else {
+        onWallsChanged();
+      }
+    } else if (pointerSession.mode === 'new-wall') {
+      if (state.isDrawing && state.preview) {
+        state.walls.push({ ...state.preview, features: [] });
+        state.preview = null;
+        state.selectedWallIndex = null;
+        onWallsChanged();
+      } else if (!state.isDrawing && !pointerSession.moved) {
+        const point = drawing.pointFromEvent(evt);
+        drawing.selectWallAtPoint(point);
+        onSelectionChanged();
+        drawing.draw();
+      } else if (state.isDrawing && !state.preview) {
+        drawing.draw();
+      }
     }
 
     releasePointer(evt.pointerId);
@@ -158,7 +332,9 @@ export function setupPointerHandlers(canvas, drawing, callbacks) {
       return;
     }
 
-    if (state.isDrawing) {
+    if (pointerSession.mode === 'drag-wall') {
+      revertWallDrag();
+    } else if (state.isDrawing) {
       state.preview = null;
       drawing.draw();
     }

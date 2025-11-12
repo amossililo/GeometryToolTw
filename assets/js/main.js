@@ -43,6 +43,11 @@ const gridSizeInput = document.getElementById('gridSize');
 
 const commandHintEl = document.getElementById('commandHint');
 
+const snapToggleButton = document.getElementById('snapToggleButton');
+const instructionsToggle = document.getElementById('instructionsToggle');
+const instructionsCard = document.querySelector('.instructions-card');
+const instructionsContent = document.getElementById('instructionsContent');
+
 const openingPrompt = document.getElementById('openingPrompt');
 const openingForm = document.getElementById('openingForm');
 const openingCancelButton = document.getElementById('openingCancel');
@@ -89,6 +94,9 @@ if (sheetsUrlInput && !sheetsUrlInput.value) {
   sheetsUrlInput.value = DEFAULT_SHEETS_WEB_APP_URL;
 }
 
+updateSnapToggleButton();
+applyInstructionsLayout();
+
 let sheetsExporter = null;
 let hintTimeout = null;
 let pendingOpeningType = null;
@@ -96,6 +104,10 @@ let lastOpeningTrigger = null;
 let lastFocusedBeforeBoq = null;
 let lastDownloadUrl = DEFAULT_BOQ_EXPORT_URL;
 let boqPollTimeout = null;
+let instructionsCollapsedForMobile = true;
+
+const mobileInstructionsMedia =
+  typeof window.matchMedia === 'function' ? window.matchMedia('(max-width: 720px)') : null;
 
 function formatNumber(value) {
   if (!Number.isFinite(value)) return '';
@@ -135,6 +147,45 @@ function updateToolStates(activeTool) {
     button.classList.toggle('is-active', isActive);
     button.setAttribute('aria-pressed', String(isActive));
   });
+}
+
+function updateSnapToggleButton() {
+  if (!snapToggleButton) return;
+  snapToggleButton.classList.toggle('is-active', state.snapToWalls);
+  snapToggleButton.setAttribute('aria-pressed', String(state.snapToWalls));
+  snapToggleButton.textContent = state.snapToWalls ? 'Wall snapping: On' : 'Wall snapping: Off';
+}
+
+function setInstructionsCollapsed(collapsed, options = {}) {
+  if (!instructionsCard || !instructionsContent || !instructionsToggle) return;
+  const { skipStore = false } = options;
+  instructionsCard.dataset.collapsed = collapsed ? 'true' : 'false';
+  if (collapsed) {
+    instructionsContent.setAttribute('hidden', '');
+  } else {
+    instructionsContent.removeAttribute('hidden');
+  }
+  instructionsToggle.setAttribute('aria-expanded', String(!collapsed));
+  instructionsToggle.textContent = collapsed ? 'Show help' : 'Hide help';
+  if (!skipStore) {
+    instructionsCollapsedForMobile = collapsed;
+  }
+}
+
+function applyInstructionsLayout() {
+  if (!instructionsCard || !instructionsContent || !instructionsToggle) return;
+  if (!mobileInstructionsMedia) {
+    instructionsToggle.hidden = true;
+    setInstructionsCollapsed(false, { skipStore: true });
+    return;
+  }
+  if (mobileInstructionsMedia.matches) {
+    instructionsToggle.hidden = false;
+    setInstructionsCollapsed(instructionsCollapsedForMobile, { skipStore: true });
+  } else {
+    instructionsToggle.hidden = true;
+    setInstructionsCollapsed(false, { skipStore: true });
+  }
 }
 
 function setActiveTool(tool) {
@@ -395,6 +446,32 @@ document.addEventListener('click', (evt) => {
   }
   closeSetupPanel();
 });
+
+if (snapToggleButton) {
+  snapToggleButton.addEventListener('click', () => {
+    state.snapToWalls = !state.snapToWalls;
+    updateSnapToggleButton();
+    showCommandHint(
+      state.snapToWalls
+        ? 'Wall snapping enabled. Dragged walls will attach to nearby ends.'
+        : 'Wall snapping disabled. Walls will move freely.',
+      'info'
+    );
+  });
+}
+
+if (instructionsToggle) {
+  instructionsToggle.addEventListener('click', () => {
+    const isCollapsed = instructionsCard?.dataset.collapsed === 'true';
+    setInstructionsCollapsed(!isCollapsed);
+  });
+}
+
+if (typeof mobileInstructionsMedia?.addEventListener === 'function') {
+  mobileInstructionsMedia.addEventListener('change', applyInstructionsLayout);
+} else if (typeof mobileInstructionsMedia?.addListener === 'function') {
+  mobileInstructionsMedia.addListener(applyInstructionsLayout);
+}
 
 if (drawToolButton) {
   drawToolButton.addEventListener('click', () => {
