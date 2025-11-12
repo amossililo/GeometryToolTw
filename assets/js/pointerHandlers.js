@@ -219,16 +219,30 @@ export function setupPointerHandlers(canvas, drawing, callbacks) {
     const point = drawing.pointFromEvent(evt);
     const wallIndex = drawing.findWallIndexNearPoint(point, 12);
 
+    const cell = drawing.cellFromEvent(evt);
+
     if (wallIndex != null) {
-      if (state.selectedWallIndex !== wallIndex) {
-        state.selectedWallIndex = wallIndex;
-        onSelectionChanged();
-        drawing.draw();
+      const wall = state.walls[wallIndex];
+      if (wall) {
+        const pointerCol = Math.round(point.x / state.gridSize);
+        const pointerRow = Math.round(point.y / state.gridSize);
+
+        if (wall.y1 === wall.y2) {
+          cell.row = wall.y1;
+          const minCol = Math.min(wall.x1, wall.x2);
+          const maxCol = Math.max(wall.x1, wall.x2);
+          const clampedCol = Math.min(Math.max(pointerCol, minCol), maxCol);
+          cell.col = clampedCol;
+        } else if (wall.x1 === wall.x2) {
+          cell.col = wall.x1;
+          const minRow = Math.min(wall.y1, wall.y2);
+          const maxRow = Math.max(wall.y1, wall.y2);
+          const clampedRow = Math.min(Math.max(pointerRow, minRow), maxRow);
+          cell.row = clampedRow;
+        }
       }
-      return;
     }
 
-    const cell = drawing.cellFromEvent(evt);
     pointerSession.active = true;
     pointerSession.pointerId = evt.pointerId;
     pointerSession.startCell = cell;
