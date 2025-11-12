@@ -770,12 +770,6 @@ if (
           'Engineers are compiling your BOQ. We will check back for the download link in about 3 seconds.';
       }
 
-      if (boqDownloadButton) {
-        boqDownloadButton.disabled = false;
-        boqDownloadButton.removeAttribute('hidden');
-        boqDownloadButton.textContent = 'Open BOQ link';
-      }
-
       if (boqResponsePreview) {
         boqResponsePreview.textContent = '';
         boqResponsePreview.setAttribute('hidden', '');
@@ -820,12 +814,22 @@ if (
               boqPromptDescription.textContent =
                 'Engineers compiled the BOQ. Review the response below and open the link when you are ready.';
             }
+            if (boqDownloadButton) {
+              boqDownloadButton.disabled = false;
+              boqDownloadButton.removeAttribute('hidden');
+              boqDownloadButton.textContent = 'Open BOQ link';
+            }
             showCommandHint('BOQ response received. Use the link button to open it when ready.', 'success');
           } else {
             updateBoqProgress('compile', 'error');
             if (boqPromptDescription) {
               boqPromptDescription.textContent =
                 'We received a response, but it indicated an error. Review the details below.';
+            }
+            if (boqDownloadButton) {
+              boqDownloadButton.disabled = false;
+              boqDownloadButton.removeAttribute('hidden');
+              boqDownloadButton.textContent = 'Open BOQ link';
             }
             showCommandHint('The BOQ export returned an error response. Review the details shown.', 'error');
           }
@@ -839,6 +843,11 @@ if (
           if (boqPromptDescription) {
             boqPromptDescription.textContent =
               'We could not fetch the BOQ response automatically. Use the link button to try manually.';
+          }
+          if (boqDownloadButton) {
+            boqDownloadButton.disabled = false;
+            boqDownloadButton.removeAttribute('hidden');
+            boqDownloadButton.textContent = 'Open BOQ link';
           }
           showCommandHint('We could not fetch the BOQ response automatically. Try the link button.', 'error');
         }
