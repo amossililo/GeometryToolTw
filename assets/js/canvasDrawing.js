@@ -104,6 +104,37 @@ export function createCanvasDrawing(canvas) {
     ctx.restore();
   }
 
+  function drawSuggestions() {
+    if (!Array.isArray(state.suggestions) || state.suggestions.length === 0) return;
+
+    const suggestionColor = colors.suggestion || '#22c55e';
+    const rendered = new Set();
+
+    ctx.save();
+    ctx.strokeStyle = suggestionColor;
+    ctx.lineWidth = 5;
+    ctx.setLineDash([10, 6]);
+
+    state.suggestions.forEach((suggestion) => {
+      const walls = Array.isArray(suggestion?.walls) ? suggestion.walls : [];
+      walls.forEach((wall) => {
+        if (!wall) return;
+        const key = `${wall.x1},${wall.y1}-${wall.x2},${wall.y2}`;
+        if (rendered.has(key)) return;
+        rendered.add(key);
+        const px = wallToPixels(wall);
+        ctx.beginPath();
+        ctx.moveTo(px.x1, px.y1);
+        ctx.lineTo(px.x2, px.y2);
+        ctx.stroke();
+        drawMeasurement(px, { isPreview: true, color: suggestionColor });
+      });
+    });
+
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
   function drawGrid() {
     const { gridSize } = state;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -321,6 +352,8 @@ export function createCanvasDrawing(canvas) {
       const measurementColor = isOpen ? colors.wallOpen : isSelected ? colors.wallActive : undefined;
       drawMeasurement(px, { color: measurementColor });
     });
+
+    drawSuggestions();
 
     if (state.preview) {
       const px = wallToPixels(state.preview);

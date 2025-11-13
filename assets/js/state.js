@@ -1,5 +1,5 @@
 export const state = {
-  gridSize: 15,
+  gridSize: 13,
   walls: [],
   isDrawing: false,
   preview: null,
@@ -10,6 +10,7 @@ export const state = {
   openEndpoints: [],
   latestMetrics: null,
   activeTool: 'draw',
+  suggestions: [],
   openingPresets: {
     window: { width: 1.5, height: 1.2 },
     door: { width: 0.9, height: 2 },
@@ -35,6 +36,7 @@ export const colors = {
   wallActive: '#2563eb',
   wallOpen: '#dc2626',
   wallText: 'rgba(17,24,39,0.85)',
+  suggestion: '#22c55e',
   windowStroke: '#0284c7',
   windowFill: 'rgba(14,165,233,0.35)',
   windowCrossbar: '#0ea5e9',

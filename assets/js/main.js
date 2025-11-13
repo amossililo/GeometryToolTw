@@ -5,6 +5,8 @@ import { createWallActions } from './wallActions.js';
 import { computeConnectivity } from './connectivity.js';
 import { createMetricsManager, computeMetricsSnapshot } from './metrics.js';
 import { selectedWallHasOpenings, getOpeningPreset, setOpeningPreset } from './openings.js';
+import { recomputeSuggestions, applySuggestions, getSuggestionCount } from './suggestions.js';
+import { trimWallExtensions } from './trimming.js';
 
 const DEFAULT_SHEETS_WEB_APP_URL =
   'https://script.google.com/macros/s/AKfycbxXBv-LEIhYb0KbWuhRYRu_6wl3_mk6hqcdA5Y_uXXiXP3gnFvbDuzA8MBIWTPxLSvE/exec';
@@ -34,6 +36,8 @@ const downloadButton = document.getElementById('downloadButton');
 const clearOpeningsButton = document.getElementById('clearOpeningsButton');
 const generateBoqButton = document.getElementById('generateBoqButton');
 const offsetWallButton = document.getElementById('offsetWallButton');
+const applySuggestionsButton = document.getElementById('applySuggestionsButton');
+const trimWallsButton = document.getElementById('trimWallsButton');
 
 const sheetsUrlInput = document.getElementById('sheetsUrl');
 const sheetsStatusEl = document.getElementById('sheetsStatus');
@@ -44,6 +48,14 @@ const unitPerCellInput = document.getElementById('unitPerCell');
 const gridSizeInput = document.getElementById('gridSize');
 
 const commandHintEl = document.getElementById('commandHint');
+
+const mobileGridMedia =
+  typeof window.matchMedia === 'function' ? window.matchMedia('(max-width: 720px)') : null;
+const defaultMobileGridSize = 8;
+const defaultDesktopGridSize = 13;
+let gridSizeWasCustomized = false;
+const initialGridSize = mobileGridMedia && mobileGridMedia.matches ? defaultMobileGridSize : defaultDesktopGridSize;
+state.gridSize = initialGridSize;
 
 const snapToggleButton = document.getElementById('snapToggleButton');
 const instructionsToggle = document.getElementById('instructionsToggle');
@@ -87,6 +99,25 @@ const metricsManager = createMetricsManager({
   doorCountEl,
 });
 
+if (mobileGridMedia) {
+  const handleGridMediaChange = (event) => {
+    if (gridSizeWasCustomized) return;
+    const nextSize = event.matches ? defaultMobileGridSize : defaultDesktopGridSize;
+    if (state.gridSize === nextSize) return;
+    state.gridSize = nextSize;
+    if (gridSizeInput) {
+      gridSizeInput.value = nextSize;
+    }
+    handleWallsChanged();
+  };
+
+  if (typeof mobileGridMedia.addEventListener === 'function') {
+    mobileGridMedia.addEventListener('change', handleGridMediaChange);
+  } else if (typeof mobileGridMedia.addListener === 'function') {
+    mobileGridMedia.addListener(handleGridMediaChange);
+  }
+}
+
 if (gridSizeInput) {
   gridSizeInput.value = state.gridSize;
 }
@@ -107,6 +138,7 @@ let lastOpeningTrigger = null;
 let lastFocusedBeforeBoq = null;
 let lastDownloadUrl = DEFAULT_BOQ_EXPORT_URL;
 let boqPollTimeout = null;
+let lastSuggestionCount = 0;
 
 updateSnapToggleButton();
 applyInstructionsLayout();
@@ -145,6 +177,18 @@ function updateClearOpeningsButton() {
 function updateOffsetButton() {
   if (!offsetWallButton) return;
   offsetWallButton.disabled = state.selectedWallIndex == null;
+}
+
+function updateApplySuggestionsButton() {
+  if (!applySuggestionsButton) return;
+  const suggestionCount = getSuggestionCount();
+  applySuggestionsButton.disabled = suggestionCount === 0;
+  if (suggestionCount === 0) {
+    applySuggestionsButton.textContent = 'Apply auto-complete';
+  } else {
+    const label = suggestionCount === 1 ? 'line' : 'lines';
+    applySuggestionsButton.textContent = `Apply ${suggestionCount} auto-complete ${label}`;
+  }
 }
 
 function updateToolStates(activeTool) {
@@ -376,6 +420,17 @@ function handleWallsChanged() {
   updateEraseButton();
   updateClearOpeningsButton();
   updateOffsetButton();
+  recomputeSuggestions();
+  updateApplySuggestionsButton();
+  const suggestionCount = getSuggestionCount();
+  if (suggestionCount > 0 && lastSuggestionCount === 0) {
+    const label = suggestionCount === 1 ? 'line' : 'lines';
+    showCommandHint(
+      `Auto-complete ready – use Apply auto-complete to add ${suggestionCount} ${label}.`,
+      'success'
+    );
+  }
+  lastSuggestionCount = suggestionCount;
   drawing.draw();
 
   if (sheetsExporter && typeof sheetsExporter.setLatestMetrics === 'function') {
@@ -647,6 +702,7 @@ if (gridSizeInput) {
   gridSizeInput.addEventListener('input', (evt) => {
     const value = Number(evt.target.value);
     if (!Number.isFinite(value) || value <= 0) return;
+    gridSizeWasCustomized = true;
     state.gridSize = value;
     handleWallsChanged();
   });
@@ -937,6 +993,43 @@ if (offsetWallButton) {
           ? 'Only straight horizontal or vertical walls can be offset.'
           : 'We could not create the offset wall. Try again.';
       showCommandHint(message, 'error');
+    }
+  });
+}
+
+if (applySuggestionsButton) {
+  applySuggestionsButton.addEventListener('click', () => {
+    const result = applySuggestions();
+    if (result.applied) {
+      const label = result.added === 1 ? 'line' : 'lines';
+      showCommandHint(`Added ${result.added} auto-complete ${label}.`, 'success');
+      handleWallsChanged();
+    } else {
+      showCommandHint('No auto-complete suggestions are ready yet.', 'info');
+    }
+  });
+}
+
+if (trimWallsButton) {
+  trimWallsButton.addEventListener('click', () => {
+    const result = trimWallExtensions();
+    if (result.trims > 0 || result.removed > 0) {
+      const parts = [];
+      if (result.trims > 0) {
+        parts.push(
+          `${result.trims} wall ${result.trims === 1 ? 'end' : 'ends'} trimmed`
+        );
+      }
+      if (result.removed > 0) {
+        parts.push(
+          `${result.removed} short ${result.removed === 1 ? 'wall' : 'walls'} removed`
+        );
+      }
+      const message = parts.join(' and ');
+      showCommandHint(`${message}.`, 'success');
+      handleWallsChanged();
+    } else {
+      showCommandHint('No nearby intersections were close enough to trim.', 'info');
     }
   });
 }
