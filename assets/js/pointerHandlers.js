@@ -1,5 +1,6 @@
 import { pointerSession, resetPointerSession, state } from './state.js';
 import { addOpeningToWall } from './openings.js';
+import { addWallToState } from './wallUtils.js';
 
 export function setupPointerHandlers(canvas, drawing, callbacks) {
   const {
@@ -354,10 +355,21 @@ export function setupPointerHandlers(canvas, drawing, callbacks) {
       }
     } else if (pointerSession.mode === 'new-wall') {
       if (state.isDrawing && state.preview) {
-        state.walls.push({ ...state.preview, features: [] });
+        const result = addWallToState(state.preview, {
+          onOverlapRemoved: () => {
+            onToolFeedback({
+              type: 'info',
+              message: 'Overlapping wall detected – existing segment kept.',
+            });
+          },
+        });
         state.preview = null;
         state.selectedWallIndex = null;
-        onWallsChanged();
+        if (result.addedSegments > 0) {
+          onWallsChanged();
+        } else {
+          drawing.draw();
+        }
       } else if (!state.isDrawing && !pointerSession.moved) {
         const point = drawing.pointFromEvent(evt);
         drawing.selectWallAtPoint(point);

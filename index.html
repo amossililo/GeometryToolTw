@@ -46,6 +46,10 @@
         </button>
         <button id="offsetWallButton" class="command-button" type="button" disabled>Offset wall</button>
         <button id="undoButton" class="command-button" type="button">Undo</button>
+        <button id="applySuggestionsButton" class="command-button" type="button" disabled>
+          Apply auto-complete
+        </button>
+        <button id="trimWallsButton" class="command-button" type="button">Trim wall ends</button>
         <button id="eraseButton" class="command-button" type="button" disabled>Erase selected</button>
         <button id="clearButton" class="command-button" type="button">Clear plan</button>
         <button id="downloadButton" class="command-button" type="button">Download PNG</button>
@@ -77,7 +81,7 @@
             <div class="field-grid">
               <label class="field">
                 <span>Grid spacing</span>
-                <input id="gridSize" type="number" min="10" step="5" value="15" aria-describedby="gridHelp" />
+                <input id="gridSize" type="number" min="5" step="1" value="13" aria-describedby="gridHelp" />
               </label>
               <label class="field">
                 <span>Real-world scale label</span>

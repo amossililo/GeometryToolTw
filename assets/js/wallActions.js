@@ -1,4 +1,5 @@
 import { state } from './state.js';
+import { addWallToState } from './wallUtils.js';
 
 export function createWallActions({
   onWallsChanged = () => {},
@@ -78,12 +79,21 @@ export function createWallActions({
       features: [],
     };
 
-    state.walls.push(newWall);
+    const result = addWallToState(newWall);
+
+    if (result.addedSegments === 0) {
+      return { success: false, reason: 'overlap' };
+    }
+
     state.selectedWallIndex = state.walls.length - 1;
     onSelectionChanged();
     onWallsChanged();
 
-    return { success: true, index: state.selectedWallIndex };
+    return {
+      success: true,
+      index: state.selectedWallIndex,
+      overlapRemoved: result.removedCells > 0,
+    };
   }
 
   return {
