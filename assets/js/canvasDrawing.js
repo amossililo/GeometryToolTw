@@ -112,8 +112,10 @@ export function createCanvasDrawing(canvas) {
 
     ctx.save();
     ctx.strokeStyle = suggestionColor;
-    ctx.lineWidth = 5;
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
     ctx.setLineDash([10, 6]);
+    ctx.globalAlpha = 0.4;
 
     state.suggestions.forEach((suggestion) => {
       const walls = Array.isArray(suggestion?.walls) ? suggestion.walls : [];
@@ -132,6 +134,7 @@ export function createCanvasDrawing(canvas) {
     });
 
     ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
     ctx.restore();
   }
 

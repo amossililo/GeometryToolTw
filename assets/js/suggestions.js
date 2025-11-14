@@ -1,4 +1,5 @@
 import { state } from './state.js';
+import { addWallToState } from './wallUtils.js';
 
 function isHorizontal(wall) {
   return wall && wall.y1 === wall.y2 && wall.x1 !== wall.x2;
@@ -207,21 +208,31 @@ export function recomputeSuggestions() {
 
 export function applySuggestions() {
   if (!Array.isArray(state.suggestions) || state.suggestions.length === 0) {
-    return { applied: false, added: 0 };
+    return { applied: false, added: 0, adjusted: 0, skipped: 0 };
   }
-  const existingSet = buildExistingWallSet();
+
   let added = 0;
+  let adjusted = 0;
+  let skipped = 0;
+
   state.suggestions.forEach((suggestion) => {
-    suggestion.walls.forEach((wall) => {
-      const key = wallKey(wall);
-      if (!key || existingSet.has(key)) return;
-      state.walls.push({ ...wall, features: [] });
-      existingSet.add(key);
-      added += 1;
+    const walls = Array.isArray(suggestion?.walls) ? suggestion.walls : [];
+    walls.forEach((wall) => {
+      const result = addWallToState(wall);
+      if (result.addedSegments > 0) {
+        added += result.addedSegments;
+        if (result.removedCells > 0) {
+          adjusted += 1;
+        }
+      } else {
+        skipped += 1;
+      }
     });
   });
+
   state.suggestions = [];
-  return { applied: added > 0, added };
+
+  return { applied: added > 0, added, adjusted, skipped };
 }
 
 export function getSuggestionCount() {

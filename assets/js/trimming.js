@@ -32,6 +32,26 @@ function intersectionPoint(a, b) {
   return null;
 }
 
+function decideTrim(distStart, distEnd, threshold) {
+  if (distStart === 0 || distEnd === 0) {
+    return null;
+  }
+
+  const minDist = Math.min(distStart, distEnd);
+  const maxDist = Math.max(distStart, distEnd);
+
+  if (minDist <= threshold) {
+    return distStart <= distEnd ? 'start' : 'end';
+  }
+
+  const ratio = maxDist / minDist;
+  if (ratio >= 1.5) {
+    return distStart <= distEnd ? 'start' : 'end';
+  }
+
+  return null;
+}
+
 function trimWallTowardsPoint(wall, point, threshold) {
   if (!wall || !point) return false;
   const horizontal = isHorizontal(wall);
@@ -43,37 +63,23 @@ function trimWallTowardsPoint(wall, point, threshold) {
   if (horizontal && point.y === wall.y1) {
     const distStart = Math.abs(point.x - wall.x1);
     const distEnd = Math.abs(point.x - wall.x2);
-    if (distStart > 0 && distStart <= threshold && distStart <= distEnd) {
+    const trim = decideTrim(distStart, distEnd, threshold);
+    if (trim === 'start') {
       wall.x1 = point.x;
       changed = true;
-    }
-    if (distEnd > 0 && distEnd <= threshold && distEnd < distStart) {
+    } else if (trim === 'end') {
       wall.x2 = point.x;
-      changed = true;
-    }
-    if (!changed && distEnd > 0 && distEnd <= threshold && distStart > threshold) {
-      wall.x2 = point.x;
-      changed = true;
-    } else if (!changed && distStart > 0 && distStart <= threshold && distEnd > threshold) {
-      wall.x1 = point.x;
       changed = true;
     }
   } else if (vertical && point.x === wall.x1) {
     const distStart = Math.abs(point.y - wall.y1);
     const distEnd = Math.abs(point.y - wall.y2);
-    if (distStart > 0 && distStart <= threshold && distStart <= distEnd) {
+    const trim = decideTrim(distStart, distEnd, threshold);
+    if (trim === 'start') {
       wall.y1 = point.y;
       changed = true;
-    }
-    if (distEnd > 0 && distEnd <= threshold && distEnd < distStart) {
+    } else if (trim === 'end') {
       wall.y2 = point.y;
-      changed = true;
-    }
-    if (!changed && distEnd > 0 && distEnd <= threshold && distStart > threshold) {
-      wall.y2 = point.y;
-      changed = true;
-    } else if (!changed && distStart > 0 && distStart <= threshold && distEnd > threshold) {
-      wall.y1 = point.y;
       changed = true;
     }
   }

@@ -977,9 +977,12 @@ if (offsetWallButton) {
     if (result.success) {
       const distanceUnits = Math.abs(offsetCells) * unitPerCell;
       const distanceLabel = formatNumber(distanceUnits);
-      const message = snapped
+      let message = snapped
         ? `Offset wall created ${distanceLabel} ${unitLabel} away (snapped to the nearest grid line).`
         : `Offset wall created ${distanceLabel} ${unitLabel} away.`;
+      if (result.overlapRemoved) {
+        message += ' Overlapping portions were removed automatically.';
+      }
       showCommandHint(message, 'success');
       updateOffsetButton();
       drawing.draw();
@@ -987,10 +990,12 @@ if (offsetWallButton) {
       const message =
         result.reason === 'no-selection'
           ? 'Select a wall before using Offset wall.'
-          : result.reason === 'invalid-offset'
+        : result.reason === 'invalid-offset'
           ? 'Enter a non-zero number for the offset distance.'
-          : result.reason === 'unsupported-orientation'
+        : result.reason === 'unsupported-orientation'
           ? 'Only straight horizontal or vertical walls can be offset.'
+        : result.reason === 'overlap'
+          ? 'That offset lies entirely on top of an existing wall, so nothing was added.'
           : 'We could not create the offset wall. Try again.';
       showCommandHint(message, 'error');
     }
@@ -1002,10 +1007,25 @@ if (applySuggestionsButton) {
     const result = applySuggestions();
     if (result.applied) {
       const label = result.added === 1 ? 'line' : 'lines';
-      showCommandHint(`Added ${result.added} auto-complete ${label}.`, 'success');
+      const parts = [`Added ${result.added} auto-complete ${label}.`];
+      if (result.adjusted > 0) {
+        parts.push(
+          `${result.adjusted} suggestion${result.adjusted === 1 ? '' : 's'} were trimmed to avoid overlaps.`
+        );
+      }
+      if (result.skipped > 0) {
+        parts.push(
+          `${result.skipped} overlapping suggestion${result.skipped === 1 ? ' was' : 's were'} skipped.`
+        );
+      }
+      showCommandHint(parts.join(' '), 'success');
       handleWallsChanged();
     } else {
-      showCommandHint('No auto-complete suggestions are ready yet.', 'info');
+      const message =
+        result.skipped > 0
+          ? 'All auto-complete suggestions overlapped existing walls, so nothing was added.'
+          : 'No auto-complete suggestions are ready yet.';
+      showCommandHint(message, 'info');
     }
   });
 }
