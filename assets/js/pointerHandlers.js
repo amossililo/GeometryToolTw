@@ -2,6 +2,7 @@ import { pointerSession, resetPointerSession, state } from './state.js';
 import { addOpeningToWall } from './openings.js';
 import { addWallToState } from './wallUtils.js';
 import { trimWallAtCell } from './trimming.js';
+import { pushUndoSnapshot, discardUndoSnapshot } from './history.js';
 
 export function setupPointerHandlers(canvas, drawing, callbacks) {
   const {
@@ -112,6 +113,12 @@ export function setupPointerHandlers(canvas, drawing, callbacks) {
     if (!original) return;
     state.walls[pointerSession.wallIndex] = cloneWall(original);
     drawing.draw();
+    if (pointerSession.undoCaptured && pointerSession.undoSnapshot) {
+      discardUndoSnapshot(pointerSession.undoSnapshot);
+      pointerSession.undoSnapshot = null;
+      pointerSession.undoCaptured = false;
+    }
+    pointerSession.moved = false;
   }
 
   function handlePointerDown(evt) {
@@ -207,6 +214,8 @@ export function setupPointerHandlers(canvas, drawing, callbacks) {
       pointerSession.startPoint = point;
       pointerSession.startCell = null;
       pointerSession.moved = false;
+      pointerSession.undoSnapshot = null;
+      pointerSession.undoCaptured = false;
 
       if (typeof canvas.setPointerCapture === 'function') {
         canvas.setPointerCapture(evt.pointerId);
@@ -343,6 +352,10 @@ export function setupPointerHandlers(canvas, drawing, callbacks) {
       }
 
       pointerSession.moved = true;
+      if (!pointerSession.undoCaptured) {
+        pointerSession.undoSnapshot = pushUndoSnapshot();
+        pointerSession.undoCaptured = true;
+      }
       const initial = pointerSession.initialWall;
       const wall = cloneWall(initial);
       if (!wall) return;
@@ -420,6 +433,7 @@ export function setupPointerHandlers(canvas, drawing, callbacks) {
       }
     } else if (pointerSession.mode === 'new-wall') {
       if (state.isDrawing && state.preview) {
+        const checkpoint = pushUndoSnapshot();
         const result = addWallToState(state.preview, {
           onOverlapRemoved: () => {
             onToolFeedback({
@@ -433,6 +447,7 @@ export function setupPointerHandlers(canvas, drawing, callbacks) {
         if (result.addedSegments > 0) {
           onWallsChanged();
         } else {
+          discardUndoSnapshot(checkpoint);
           drawing.draw();
         }
       } else if (!state.isDrawing && !pointerSession.moved) {

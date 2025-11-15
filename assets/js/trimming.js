@@ -1,4 +1,5 @@
 import { state } from './state.js';
+import { pushUndoSnapshot } from './history.js';
 
 function isHorizontal(wall) {
   return wall && wall.y1 === wall.y2 && wall.x1 !== wall.x2;
@@ -221,6 +222,7 @@ export function trimWallAtCell(wallIndex, point) {
 
   const netChange = segments.length - 1;
 
+  pushUndoSnapshot();
   state.walls.splice(wallIndex, 1, ...segments);
 
   if (state.selectedWallIndex === wallIndex) {

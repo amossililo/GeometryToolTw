@@ -1,5 +1,6 @@
 import { state } from './state.js';
 import { addWallToState } from './wallUtils.js';
+import { pushUndoSnapshot, discardUndoSnapshot } from './history.js';
 
 function isHorizontal(wall) {
   return wall && wall.y1 === wall.y2 && wall.x1 !== wall.x2;
@@ -474,6 +475,7 @@ export function applySuggestions() {
     return { applied: false, added: 0, adjusted: 0, skipped: 0 };
   }
 
+  const checkpoint = pushUndoSnapshot();
   let added = 0;
   let adjusted = 0;
   let skipped = 0;
@@ -486,6 +488,10 @@ export function applySuggestions() {
   });
 
   state.suggestions = [];
+
+  if (added === 0) {
+    discardUndoSnapshot(checkpoint);
+  }
 
   return { applied: added > 0, added, adjusted, skipped };
 }
@@ -501,8 +507,13 @@ export function applySuggestionAtIndex(index) {
   }
 
   const suggestion = state.suggestions[numericIndex];
+  const checkpoint = pushUndoSnapshot();
   const result = applyWalls(suggestion?.walls);
   state.suggestions.splice(numericIndex, 1);
+
+  if (result.added === 0) {
+    discardUndoSnapshot(checkpoint);
+  }
 
   return { applied: result.added > 0, ...result };
 }
@@ -531,10 +542,15 @@ export function applySuggestionWall(suggestionIndex, wallIndex) {
   }
 
   const [wall] = walls.splice(numericWallIndex, 1);
+  const checkpoint = pushUndoSnapshot();
   const result = applyWalls([wall]);
 
   if (walls.length === 0) {
     state.suggestions.splice(numericSuggestionIndex, 1);
+  }
+
+  if (result.added === 0) {
+    discardUndoSnapshot(checkpoint);
   }
 
   return { applied: result.added > 0, ...result };
