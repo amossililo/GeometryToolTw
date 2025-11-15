@@ -136,11 +136,16 @@ function isWallCovered(wall, coverage) {
   return false;
 }
 
-function computeCornerSuggestions(existingSet, coverage) {
+function computeCornerSuggestions(existingSet, coverage, openWallIndexes) {
+  const openIndexes =
+    openWallIndexes instanceof Set
+      ? openWallIndexes
+      : new Set(Array.isArray(openWallIndexes) ? openWallIndexes : []);
   const endpointMap = new Map();
 
   state.walls.forEach((wall, wallIndex) => {
     if (!wall) return;
+    if (!openIndexes.has(wallIndex)) return;
     const endpoints = [
       { x: wall.x1, y: wall.y1, index: 0 },
       { x: wall.x2, y: wall.y2, index: 1 },
@@ -220,14 +225,19 @@ function computeCornerSuggestions(existingSet, coverage) {
   return suggestions;
 }
 
-function computeGapSuggestions(existingSet, coverage) {
+function computeGapSuggestions(existingSet, coverage, openWallIndexes) {
   const suggestions = [];
   const seenKeys = new Set();
   const gapThreshold = 2;
+  const openIndexes =
+    openWallIndexes instanceof Set
+      ? openWallIndexes
+      : new Set(Array.isArray(openWallIndexes) ? openWallIndexes : []);
 
   for (let i = 0; i < state.walls.length; i += 1) {
     const first = state.walls[i];
     if (!first) continue;
+    if (!openIndexes.has(i)) continue;
     const firstHorizontal = isHorizontal(first);
     const firstVertical = isVertical(first);
     if (!firstHorizontal && !firstVertical) continue;
@@ -238,6 +248,7 @@ function computeGapSuggestions(existingSet, coverage) {
     for (let j = i + 1; j < state.walls.length; j += 1) {
       const second = state.walls[j];
       if (!second) continue;
+      if (!openIndexes.has(j)) continue;
       const secondHorizontal = isHorizontal(second);
       const secondVertical = isVertical(second);
 
@@ -294,9 +305,10 @@ function computeGapSuggestions(existingSet, coverage) {
 
 export function recomputeSuggestions() {
   const { set: existingSet, coverage } = buildExistingWallIndex();
+  const openIndexes = state.openWallIndexes instanceof Set ? state.openWallIndexes : new Set();
   const suggestions = [
-    ...computeCornerSuggestions(existingSet, coverage),
-    ...computeGapSuggestions(existingSet, coverage),
+    ...computeCornerSuggestions(existingSet, coverage, openIndexes),
+    ...computeGapSuggestions(existingSet, coverage, openIndexes),
   ];
   state.suggestions = suggestions;
   return suggestions;
