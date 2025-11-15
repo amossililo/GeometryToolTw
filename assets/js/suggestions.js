@@ -1,5 +1,6 @@
 import { state } from './state.js';
 import { addWallToState } from './wallUtils.js';
+import { pushUndoSnapshot, discardUndoSnapshot } from './history.js';
 
 function isHorizontal(wall) {
   return wall && wall.y1 === wall.y2 && wall.x1 !== wall.x2;
@@ -30,22 +31,122 @@ function wallKey(wall) {
   return `${normalized.x1},${normalized.y1}-${normalized.x2},${normalized.y2}`;
 }
 
-function buildExistingWallSet() {
+function createAxisInterval(wall) {
+  if (!wall) return null;
+  if (isHorizontal(wall)) {
+    return {
+      orientation: 'horizontal',
+      constant: wall.y1,
+      start: Math.min(wall.x1, wall.x2),
+      end: Math.max(wall.x1, wall.x2),
+    };
+  }
+  if (isVertical(wall)) {
+    return {
+      orientation: 'vertical',
+      constant: wall.x1,
+      start: Math.min(wall.y1, wall.y2),
+      end: Math.max(wall.y1, wall.y2),
+    };
+  }
+  return null;
+}
+
+function mergeIntervals(intervals) {
+  if (!Array.isArray(intervals) || intervals.length === 0) return [];
+  const sorted = intervals
+    .map((segment) => ({ start: segment.start, end: segment.end }))
+    .filter((segment) => Number.isFinite(segment.start) && Number.isFinite(segment.end))
+    .sort((a, b) => a.start - b.start);
+
+  if (!sorted.length) return [];
+
+  const merged = [sorted[0]];
+
+  for (let i = 1; i < sorted.length; i += 1) {
+    const current = sorted[i];
+    const last = merged[merged.length - 1];
+    if (current.start <= last.end) {
+      last.end = Math.max(last.end, current.end);
+    } else {
+      merged.push({ start: current.start, end: current.end });
+    }
+  }
+
+  return merged;
+}
+
+function buildExistingWallIndex() {
   const set = new Set();
+  const coverage = {
+    horizontal: new Map(),
+    vertical: new Map(),
+  };
+
   state.walls.forEach((wall) => {
     const key = wallKey(wall);
     if (key) {
       set.add(key);
     }
+
+    const interval = createAxisInterval(wall);
+    if (!interval) return;
+
+    const map = interval.orientation === 'horizontal' ? coverage.horizontal : coverage.vertical;
+    if (!map.has(interval.constant)) {
+      map.set(interval.constant, []);
+    }
+    map.get(interval.constant).push({ start: interval.start, end: interval.end });
   });
-  return set;
+
+  coverage.horizontal.forEach((intervals, key) => {
+    coverage.horizontal.set(key, mergeIntervals(intervals));
+  });
+  coverage.vertical.forEach((intervals, key) => {
+    coverage.vertical.set(key, mergeIntervals(intervals));
+  });
+
+  return { set, coverage };
 }
 
-function computeCornerSuggestions(existingSet) {
+function isWallCovered(wall, coverage) {
+  if (!coverage) return false;
+  const interval = createAxisInterval(wall);
+  if (!interval) return false;
+
+  const map = interval.orientation === 'horizontal' ? coverage.horizontal : coverage.vertical;
+  if (!map) return false;
+  const segments = map.get(interval.constant);
+  if (!Array.isArray(segments) || segments.length === 0) return false;
+
+  let cursor = interval.start;
+  for (let i = 0; i < segments.length; i += 1) {
+    const segment = segments[i];
+    if (segment.end <= cursor) {
+      continue;
+    }
+    if (segment.start > cursor) {
+      return false;
+    }
+    if (segment.end >= interval.end) {
+      return true;
+    }
+    cursor = segment.end;
+  }
+
+  return false;
+}
+
+function computeCornerSuggestions(existingSet, coverage, openWallIndexes) {
+  const openIndexes =
+    openWallIndexes instanceof Set
+      ? openWallIndexes
+      : new Set(Array.isArray(openWallIndexes) ? openWallIndexes : []);
   const endpointMap = new Map();
 
   state.walls.forEach((wall, wallIndex) => {
     if (!wall) return;
+    if (!openIndexes.has(wallIndex)) return;
     const endpoints = [
       { x: wall.x1, y: wall.y1, index: 0 },
       { x: wall.x2, y: wall.y2, index: 1 },
@@ -99,7 +200,8 @@ function computeCornerSuggestions(existingSet) {
         const candidates = [verticalCompletion, horizontalCompletion]
           .map((candidate) => normalizeWall(candidate))
           .filter((candidate) => candidate && Math.abs(candidate.x1 - candidate.x2) + Math.abs(candidate.y1 - candidate.y2) > 0)
-          .filter((candidate) => !existingSet.has(wallKey(candidate)));
+          .filter((candidate) => !existingSet.has(wallKey(candidate)))
+          .filter((candidate) => !isWallCovered(candidate, coverage));
 
         if (!candidates.length) return;
 
@@ -124,14 +226,19 @@ function computeCornerSuggestions(existingSet) {
   return suggestions;
 }
 
-function computeGapSuggestions(existingSet) {
+function computeGapSuggestions(existingSet, coverage, openWallIndexes) {
   const suggestions = [];
   const seenKeys = new Set();
   const gapThreshold = 2;
+  const openIndexes =
+    openWallIndexes instanceof Set
+      ? openWallIndexes
+      : new Set(Array.isArray(openWallIndexes) ? openWallIndexes : []);
 
   for (let i = 0; i < state.walls.length; i += 1) {
     const first = state.walls[i];
     if (!first) continue;
+    if (!openIndexes.has(i)) continue;
     const firstHorizontal = isHorizontal(first);
     const firstVertical = isVertical(first);
     if (!firstHorizontal && !firstVertical) continue;
@@ -142,6 +249,7 @@ function computeGapSuggestions(existingSet) {
     for (let j = i + 1; j < state.walls.length; j += 1) {
       const second = state.walls[j];
       if (!second) continue;
+      if (!openIndexes.has(j)) continue;
       const secondHorizontal = isHorizontal(second);
       const secondVertical = isVertical(second);
 
@@ -158,7 +266,7 @@ function computeGapSuggestions(existingSet) {
         if (gap > 0 && gap <= gapThreshold) {
           const candidate = { x1: left.x2, y1: left.y1, x2: right.x1, y2: left.y1 };
           const key = wallKey(candidate);
-          if (key && !existingSet.has(key) && !seenKeys.has(key)) {
+          if (key && !existingSet.has(key) && !seenKeys.has(key) && !isWallCovered(candidate, coverage)) {
             seenKeys.add(key);
             suggestions.push({
               type: 'gap',
@@ -180,7 +288,7 @@ function computeGapSuggestions(existingSet) {
         if (gap > 0 && gap <= gapThreshold) {
           const candidate = { x1: top.x1, y1: top.y2, x2: top.x1, y2: bottom.y1 };
           const key = wallKey(candidate);
-          if (key && !existingSet.has(key) && !seenKeys.has(key)) {
+          if (key && !existingSet.has(key) && !seenKeys.has(key) && !isWallCovered(candidate, coverage)) {
             seenKeys.add(key);
             suggestions.push({
               type: 'gap',
@@ -196,14 +304,170 @@ function computeGapSuggestions(existingSet) {
   return suggestions;
 }
 
+function computeEndpointSpanSuggestions(existingSet, coverage, openWallIndexes) {
+  const openIndexes =
+    openWallIndexes instanceof Set
+      ? openWallIndexes
+      : new Set(Array.isArray(openWallIndexes) ? openWallIndexes : []);
+
+  if (!openIndexes.size) {
+    return [];
+  }
+
+  const horizontalGroups = new Map();
+  const verticalGroups = new Map();
+
+  state.walls.forEach((wall, wallIndex) => {
+    if (!wall) return;
+    if (!openIndexes.has(wallIndex)) return;
+
+    if (isHorizontal(wall)) {
+      const points = [
+        { x: wall.x1, y: wall.y1 },
+        { x: wall.x2, y: wall.y2 },
+      ];
+      points.forEach((point) => {
+        const key = point.x;
+        if (!horizontalGroups.has(key)) {
+          horizontalGroups.set(key, []);
+        }
+        horizontalGroups.get(key).push({ ...point, wallIndex });
+      });
+    } else if (isVertical(wall)) {
+      const points = [
+        { x: wall.x1, y: wall.y1 },
+        { x: wall.x2, y: wall.y2 },
+      ];
+      points.forEach((point) => {
+        const key = point.y;
+        if (!verticalGroups.has(key)) {
+          verticalGroups.set(key, []);
+        }
+        verticalGroups.get(key).push({ ...point, wallIndex });
+      });
+    }
+  });
+
+  const suggestions = [];
+  const seenKeys = new Set();
+
+  horizontalGroups.forEach((entries, xValue) => {
+    if (!Array.isArray(entries) || entries.length < 2) return;
+    const sorted = entries
+      .slice()
+      .sort((a, b) => a.y - b.y);
+
+    for (let i = 0; i < sorted.length - 1; i += 1) {
+      const first = sorted[i];
+      for (let j = i + 1; j < sorted.length; j += 1) {
+        const second = sorted[j];
+        if (first.wallIndex === second.wallIndex) continue;
+        if (first.y === second.y) continue;
+
+        const candidate = normalizeWall({
+          x1: Number(xValue),
+          y1: first.y,
+          x2: Number(xValue),
+          y2: second.y,
+        });
+        if (!candidate) continue;
+
+        const key = wallKey(candidate);
+        if (!key || existingSet.has(key) || seenKeys.has(key)) continue;
+        if (isWallCovered(candidate, coverage)) continue;
+
+        seenKeys.add(key);
+        suggestions.push({
+          type: 'endpoint-span',
+          description: 'Connect the open walls to close the loop.',
+          walls: [candidate],
+          anchor: {
+            x: candidate.x1,
+            y: (candidate.y1 + candidate.y2) / 2,
+          },
+        });
+      }
+    }
+  });
+
+  verticalGroups.forEach((entries, yValue) => {
+    if (!Array.isArray(entries) || entries.length < 2) return;
+    const sorted = entries
+      .slice()
+      .sort((a, b) => a.x - b.x);
+
+    for (let i = 0; i < sorted.length - 1; i += 1) {
+      const first = sorted[i];
+      for (let j = i + 1; j < sorted.length; j += 1) {
+        const second = sorted[j];
+        if (first.wallIndex === second.wallIndex) continue;
+        if (first.x === second.x) continue;
+
+        const candidate = normalizeWall({
+          x1: first.x,
+          y1: Number(yValue),
+          x2: second.x,
+          y2: Number(yValue),
+        });
+        if (!candidate) continue;
+
+        const key = wallKey(candidate);
+        if (!key || existingSet.has(key) || seenKeys.has(key)) continue;
+        if (isWallCovered(candidate, coverage)) continue;
+
+        seenKeys.add(key);
+        suggestions.push({
+          type: 'endpoint-span',
+          description: 'Connect the open walls to close the loop.',
+          walls: [candidate],
+          anchor: {
+            x: (candidate.x1 + candidate.x2) / 2,
+            y: candidate.y1,
+          },
+        });
+      }
+    }
+  });
+
+  return suggestions;
+}
+
 export function recomputeSuggestions() {
-  const existingSet = buildExistingWallSet();
+  const { set: existingSet, coverage } = buildExistingWallIndex();
+  const openIndexes = state.openWallIndexes instanceof Set ? state.openWallIndexes : new Set();
   const suggestions = [
-    ...computeCornerSuggestions(existingSet),
-    ...computeGapSuggestions(existingSet),
+    ...computeCornerSuggestions(existingSet, coverage, openIndexes),
+    ...computeGapSuggestions(existingSet, coverage, openIndexes),
+    ...computeEndpointSpanSuggestions(existingSet, coverage, openIndexes),
   ];
   state.suggestions = suggestions;
   return suggestions;
+}
+
+function applyWalls(walls) {
+  let added = 0;
+  let adjusted = 0;
+  let skipped = 0;
+
+  const safeWalls = Array.isArray(walls) ? walls : [];
+  safeWalls.forEach((wall) => {
+    if (!wall) {
+      skipped += 1;
+      return;
+    }
+
+    const result = addWallToState(wall);
+    if (result.addedSegments > 0) {
+      added += result.addedSegments;
+      if (result.removedCells > 0) {
+        adjusted += 1;
+      }
+    } else {
+      skipped += 1;
+    }
+  });
+
+  return { added, adjusted, skipped };
 }
 
 export function applySuggestions() {
@@ -211,28 +475,85 @@ export function applySuggestions() {
     return { applied: false, added: 0, adjusted: 0, skipped: 0 };
   }
 
+  const checkpoint = pushUndoSnapshot();
   let added = 0;
   let adjusted = 0;
   let skipped = 0;
 
   state.suggestions.forEach((suggestion) => {
-    const walls = Array.isArray(suggestion?.walls) ? suggestion.walls : [];
-    walls.forEach((wall) => {
-      const result = addWallToState(wall);
-      if (result.addedSegments > 0) {
-        added += result.addedSegments;
-        if (result.removedCells > 0) {
-          adjusted += 1;
-        }
-      } else {
-        skipped += 1;
-      }
-    });
+    const result = applyWalls(suggestion?.walls);
+    added += result.added;
+    adjusted += result.adjusted;
+    skipped += result.skipped;
   });
 
   state.suggestions = [];
 
+  if (added === 0) {
+    discardUndoSnapshot(checkpoint);
+  }
+
   return { applied: added > 0, added, adjusted, skipped };
+}
+
+export function applySuggestionAtIndex(index) {
+  if (!Array.isArray(state.suggestions) || index == null) {
+    return { applied: false, added: 0, adjusted: 0, skipped: 0 };
+  }
+
+  const numericIndex = Number(index);
+  if (!Number.isInteger(numericIndex) || numericIndex < 0 || numericIndex >= state.suggestions.length) {
+    return { applied: false, added: 0, adjusted: 0, skipped: 0 };
+  }
+
+  const suggestion = state.suggestions[numericIndex];
+  const checkpoint = pushUndoSnapshot();
+  const result = applyWalls(suggestion?.walls);
+  state.suggestions.splice(numericIndex, 1);
+
+  if (result.added === 0) {
+    discardUndoSnapshot(checkpoint);
+  }
+
+  return { applied: result.added > 0, ...result };
+}
+
+export function applySuggestionWall(suggestionIndex, wallIndex) {
+  if (!Array.isArray(state.suggestions)) {
+    return { applied: false, added: 0, adjusted: 0, skipped: 0 };
+  }
+
+  const numericSuggestionIndex = Number(suggestionIndex);
+  const numericWallIndex = Number(wallIndex);
+
+  if (
+    !Number.isInteger(numericSuggestionIndex) ||
+    !Number.isInteger(numericWallIndex) ||
+    numericSuggestionIndex < 0 ||
+    numericSuggestionIndex >= state.suggestions.length
+  ) {
+    return { applied: false, added: 0, adjusted: 0, skipped: 0 };
+  }
+
+  const suggestion = state.suggestions[numericSuggestionIndex];
+  const walls = Array.isArray(suggestion?.walls) ? suggestion.walls : null;
+  if (!walls || numericWallIndex < 0 || numericWallIndex >= walls.length) {
+    return { applied: false, added: 0, adjusted: 0, skipped: 0 };
+  }
+
+  const [wall] = walls.splice(numericWallIndex, 1);
+  const checkpoint = pushUndoSnapshot();
+  const result = applyWalls([wall]);
+
+  if (walls.length === 0) {
+    state.suggestions.splice(numericSuggestionIndex, 1);
+  }
+
+  if (result.added === 0) {
+    discardUndoSnapshot(checkpoint);
+  }
+
+  return { applied: result.added > 0, ...result };
 }
 
 export function getSuggestionCount() {

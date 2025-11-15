@@ -1,6 +1,8 @@
 import { pointerSession, resetPointerSession, state } from './state.js';
 import { addOpeningToWall } from './openings.js';
 import { addWallToState } from './wallUtils.js';
+import { trimWallAtCell } from './trimming.js';
+import { pushUndoSnapshot, discardUndoSnapshot } from './history.js';
 
 export function setupPointerHandlers(canvas, drawing, callbacks) {
   const {
@@ -111,6 +113,12 @@ export function setupPointerHandlers(canvas, drawing, callbacks) {
     if (!original) return;
     state.walls[pointerSession.wallIndex] = cloneWall(original);
     drawing.draw();
+    if (pointerSession.undoCaptured && pointerSession.undoSnapshot) {
+      discardUndoSnapshot(pointerSession.undoSnapshot);
+      pointerSession.undoSnapshot = null;
+      pointerSession.undoCaptured = false;
+    }
+    pointerSession.moved = false;
   }
 
   function handlePointerDown(evt) {
@@ -206,12 +214,78 @@ export function setupPointerHandlers(canvas, drawing, callbacks) {
       pointerSession.startPoint = point;
       pointerSession.startCell = null;
       pointerSession.moved = false;
+      pointerSession.undoSnapshot = null;
+      pointerSession.undoCaptured = false;
 
       if (typeof canvas.setPointerCapture === 'function') {
         canvas.setPointerCapture(evt.pointerId);
       }
 
       onToolFeedback({ type: 'info', message: 'Drag to reposition the selected wall.' });
+      return;
+    }
+
+    if (tool === 'trim') {
+      const point = drawing.pointFromEvent(evt);
+      const wallIndex = drawing.findWallIndexNearPoint(point, 12);
+
+      if (wallIndex == null) {
+        onToolFeedback({ type: 'info', message: 'Click directly on a wall segment to trim it.' });
+        return;
+      }
+
+      const gridPoint = {
+        x: Math.round(point.x / state.gridSize),
+        y: Math.round(point.y / state.gridSize),
+      };
+
+      const result = trimWallAtCell(wallIndex, gridPoint);
+
+      if (!result?.trimmed) {
+        const reason = result?.reason;
+        let message;
+        let tone = 'info';
+        if (reason === 'edge') {
+          message = 'Click between corners on the wall to remove a span.';
+        } else if (reason === 'intersection') {
+          message = 'Pick a point between intersections to trim that wall.';
+        } else if (reason === 'no-span') {
+          message = 'That point cannot be trimmed—choose a section between corners.';
+        } else if (reason === 'unsupported-wall') {
+          message = 'Only straight horizontal or vertical walls can be trimmed.';
+          tone = 'error';
+        } else if (reason === 'invalid-point') {
+          message = 'We could not determine where to trim. Try clicking the wall again.';
+          tone = 'error';
+        } else {
+          message = 'Select a wall segment and click inside it to trim.';
+        }
+        onToolFeedback({ type: tone, message });
+        return;
+      }
+
+      onWallsChanged();
+      onSelectionChanged();
+
+      const trimmedCells = Math.max(Math.round(Math.abs(result.removedCells || 0)), 0);
+      const parts = [];
+      if (result.resultingSegments === 0) {
+        parts.push('Removed the entire wall segment.');
+      } else if (trimmedCells > 0) {
+        parts.push(
+          `Removed ${trimmedCells} grid ${trimmedCells === 1 ? 'cell' : 'cells'} from that wall.`
+        );
+      } else {
+        parts.push('Removed that wall span.');
+      }
+
+      if (result.removedFeatures > 0) {
+        parts.push(
+          `${result.removedFeatures} opening${result.removedFeatures === 1 ? '' : 's'} were deleted.`
+        );
+      }
+
+      onToolFeedback({ type: 'success', message: parts.join(' ') });
       return;
     }
 
@@ -278,6 +352,10 @@ export function setupPointerHandlers(canvas, drawing, callbacks) {
       }
 
       pointerSession.moved = true;
+      if (!pointerSession.undoCaptured) {
+        pointerSession.undoSnapshot = pushUndoSnapshot();
+        pointerSession.undoCaptured = true;
+      }
       const initial = pointerSession.initialWall;
       const wall = cloneWall(initial);
       if (!wall) return;
@@ -355,6 +433,7 @@ export function setupPointerHandlers(canvas, drawing, callbacks) {
       }
     } else if (pointerSession.mode === 'new-wall') {
       if (state.isDrawing && state.preview) {
+        const checkpoint = pushUndoSnapshot();
         const result = addWallToState(state.preview, {
           onOverlapRemoved: () => {
             onToolFeedback({
@@ -368,6 +447,7 @@ export function setupPointerHandlers(canvas, drawing, callbacks) {
         if (result.addedSegments > 0) {
           onWallsChanged();
         } else {
+          discardUndoSnapshot(checkpoint);
           drawing.draw();
         }
       } else if (!state.isDrawing && !pointerSession.moved) {

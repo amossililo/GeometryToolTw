@@ -1,4 +1,5 @@
 import { state } from './state.js';
+import { pushUndoSnapshot } from './history.js';
 
 function ensureWallFeatures(wall) {
   if (!wall) return [];
@@ -122,6 +123,8 @@ export function addOpeningToWall(wallIndex, { type, position, width, height }) {
     return { success: false, reason: 'overlap' };
   }
 
+  pushUndoSnapshot();
+
   features.push({
     type,
     position: range.center,
@@ -139,6 +142,7 @@ export function clearOpeningsFromWall(wallIndex) {
   if (!wall || !Array.isArray(wall.features) || wall.features.length === 0) {
     return false;
   }
+  pushUndoSnapshot();
   wall.features = [];
   return true;
 }
