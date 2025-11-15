@@ -60,6 +60,28 @@ const snapToggleButton = document.getElementById('snapToggleButton');
 const instructionsToggle = document.getElementById('instructionsToggle');
 const instructionsCard = document.querySelector('.instructions-card');
 const instructionsContent = document.getElementById('instructionsContent');
+const instructionsHelpButton = document.getElementById('instructionsHelpButton');
+const instructionsDialog = document.getElementById('instructionsDialog');
+const instructionsDialogBody = instructionsDialog?.querySelector('.instructions-dialog__body');
+const instructionsDialogClose = document.getElementById('instructionsDialogClose');
+
+const supportsInstructionsDialog =
+  instructionsDialog instanceof HTMLDialogElement && typeof instructionsDialog.showModal === 'function';
+
+if (supportsInstructionsDialog) {
+  document.documentElement.classList.add('has-instructions-dialog');
+  if (instructionsDialogBody && instructionsContent) {
+    instructionsDialogBody.innerHTML = instructionsContent.innerHTML;
+  }
+  if (instructionsHelpButton) {
+    instructionsHelpButton.hidden = false;
+  }
+} else {
+  document.documentElement.classList.remove('has-instructions-dialog');
+  if (instructionsHelpButton) {
+    instructionsHelpButton.hidden = true;
+  }
+}
 
 let instructionsCollapsedForMobile = true;
 const mobileInstructionsMedia =
@@ -314,18 +336,34 @@ function setInstructionsCollapsed(collapsed, options = {}) {
 
 function applyInstructionsLayout() {
   if (!instructionsCard || !instructionsContent || !instructionsToggle) return;
+  const isMobile = Boolean(mobileInstructionsMedia && mobileInstructionsMedia.matches);
+  if (supportsInstructionsDialog && isMobile) {
+    instructionsToggle.hidden = true;
+    setInstructionsCollapsed(false, { skipStore: true });
+    return;
+  }
   if (!mobileInstructionsMedia) {
     instructionsToggle.hidden = true;
     setInstructionsCollapsed(false, { skipStore: true });
     return;
   }
-  if (mobileInstructionsMedia.matches) {
+  if (isMobile) {
     instructionsToggle.hidden = false;
     setInstructionsCollapsed(instructionsCollapsedForMobile, { skipStore: true });
   } else {
     instructionsToggle.hidden = true;
     setInstructionsCollapsed(false, { skipStore: true });
   }
+}
+
+function handleInstructionsMediaChange(event) {
+  if (!mobileInstructionsMedia) return;
+  const matches =
+    typeof event?.matches === 'boolean' ? event.matches : Boolean(mobileInstructionsMedia.matches);
+  if (supportsInstructionsDialog && instructionsDialog?.open && matches === false) {
+    instructionsDialog.close();
+  }
+  applyInstructionsLayout();
 }
 
 function setActiveTool(tool) {
@@ -863,10 +901,46 @@ if (instructionsToggle) {
   });
 }
 
+if (instructionsHelpButton && supportsInstructionsDialog && instructionsDialog) {
+  instructionsHelpButton.addEventListener('click', () => {
+    if (instructionsDialog.open) return;
+    instructionsDialog.showModal();
+    instructionsHelpButton.setAttribute('aria-expanded', 'true');
+    const focusTarget = instructionsDialogClose || instructionsDialogBody;
+    focusTarget?.focus?.();
+  });
+}
+
+if (instructionsDialogClose && supportsInstructionsDialog && instructionsDialog) {
+  instructionsDialogClose.addEventListener('click', () => {
+    instructionsDialog.close();
+  });
+}
+
+if (instructionsDialog && supportsInstructionsDialog) {
+  instructionsDialog.addEventListener('close', () => {
+    instructionsHelpButton?.setAttribute('aria-expanded', 'false');
+    if (instructionsHelpButton && instructionsHelpButton.offsetParent !== null) {
+      instructionsHelpButton.focus();
+    }
+  });
+
+  instructionsDialog.addEventListener('cancel', (event) => {
+    event.preventDefault();
+    instructionsDialog.close();
+  });
+
+  instructionsDialog.addEventListener('click', (event) => {
+    if (event.target === instructionsDialog) {
+      instructionsDialog.close();
+    }
+  });
+}
+
 if (typeof mobileInstructionsMedia?.addEventListener === 'function') {
-  mobileInstructionsMedia.addEventListener('change', applyInstructionsLayout);
+  mobileInstructionsMedia.addEventListener('change', handleInstructionsMediaChange);
 } else if (typeof mobileInstructionsMedia?.addListener === 'function') {
-  mobileInstructionsMedia.addListener(applyInstructionsLayout);
+  mobileInstructionsMedia.addListener(handleInstructionsMediaChange);
 }
 
 if (drawToolButton) {
