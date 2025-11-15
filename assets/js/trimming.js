@@ -8,126 +8,231 @@ function isVertical(wall) {
   return wall && wall.x1 === wall.x2 && wall.y1 !== wall.y2;
 }
 
-function intersectionPoint(a, b) {
-  if (!a || !b) return null;
-  const aHorizontal = isHorizontal(a);
-  const aVertical = isVertical(a);
-  const bHorizontal = isHorizontal(b);
-  const bVertical = isVertical(b);
-
-  if (aHorizontal && bVertical) {
-    const y = a.y1;
-    const x = b.x1;
-    const aMinX = Math.min(a.x1, a.x2);
-    const aMaxX = Math.max(a.x1, a.x2);
-    const bMinY = Math.min(b.y1, b.y2);
-    const bMaxY = Math.max(b.y1, b.y2);
-    if (x >= aMinX && x <= aMaxX && y >= bMinY && y <= bMaxY) {
-      return { x, y };
-    }
-  } else if (aVertical && bHorizontal) {
-    const point = intersectionPoint(b, a);
-    return point ? { x: point.x, y: point.y } : null;
+function getWallSpan(wall) {
+  if (!wall) return null;
+  if (isHorizontal(wall)) {
+    const minX = Math.min(wall.x1, wall.x2);
+    const maxX = Math.max(wall.x1, wall.x2);
+    if (minX === maxX) return null;
+    return {
+      orientation: 'horizontal',
+      startCoord: minX,
+      endCoord: maxX,
+      constant: wall.y1,
+      isIncreasing: wall.x1 <= wall.x2,
+      length: maxX - minX,
+    };
+  }
+  if (isVertical(wall)) {
+    const minY = Math.min(wall.y1, wall.y2);
+    const maxY = Math.max(wall.y1, wall.y2);
+    if (minY === maxY) return null;
+    return {
+      orientation: 'vertical',
+      startCoord: minY,
+      endCoord: maxY,
+      constant: wall.x1,
+      isIncreasing: wall.y1 <= wall.y2,
+      length: maxY - minY,
+    };
   }
   return null;
 }
 
-function decideTrim(distStart, distEnd, threshold) {
-  if (distStart === 0 || distEnd === 0) {
-    return null;
-  }
+function projectWallFeatures(wall, span) {
+  if (!wall || !span) return [];
+  const features = Array.isArray(wall.features) ? wall.features : [];
+  const axisStart = span.startCoord;
+  const length = span.length;
+  if (!(length > 0)) return [];
 
-  const minDist = Math.min(distStart, distEnd);
-  const maxDist = Math.max(distStart, distEnd);
-
-  if (minDist <= threshold) {
-    return distStart <= distEnd ? 'start' : 'end';
-  }
-
-  const ratio = maxDist / minDist;
-  if (ratio >= 1.5) {
-    return distStart <= distEnd ? 'start' : 'end';
-  }
-
-  return null;
+  return features.map((feature) => {
+    const position = Number.isFinite(feature?.position) ? feature.position : 0.5;
+    const lengthCells = Number.isFinite(feature?.lengthCells) && feature.lengthCells > 0 ? feature.lengthCells : 0;
+    const center = axisStart + position * length;
+    const half = lengthCells / 2;
+    return {
+      feature,
+      center,
+      start: center - half,
+      end: center + half,
+    };
+  });
 }
 
-function trimWallTowardsPoint(wall, point, threshold) {
-  if (!wall || !point) return false;
-  const horizontal = isHorizontal(wall);
-  const vertical = isVertical(wall);
-  if (!horizontal && !vertical) return false;
+function assignFeaturesToRange(range, span, projections) {
+  const rangeLength = range.end - range.start;
+  if (!(rangeLength > 0)) return [];
 
-  let changed = false;
+  const orientationIncreasing = span.isIncreasing;
+  const assigned = [];
 
-  if (horizontal && point.y === wall.y1) {
-    const distStart = Math.abs(point.x - wall.x1);
-    const distEnd = Math.abs(point.x - wall.x2);
-    const trim = decideTrim(distStart, distEnd, threshold);
-    if (trim === 'start') {
-      wall.x1 = point.x;
-      changed = true;
-    } else if (trim === 'end') {
-      wall.x2 = point.x;
-      changed = true;
+  projections.forEach((projection) => {
+    if (!projection) return;
+    const { feature, start, end, center } = projection;
+    if (start < range.start - 1e-6 || end > range.end + 1e-6) {
+      return;
     }
-  } else if (vertical && point.x === wall.x1) {
-    const distStart = Math.abs(point.y - wall.y1);
-    const distEnd = Math.abs(point.y - wall.y2);
-    const trim = decideTrim(distStart, distEnd, threshold);
-    if (trim === 'start') {
-      wall.y1 = point.y;
-      changed = true;
-    } else if (trim === 'end') {
-      wall.y2 = point.y;
-      changed = true;
-    }
-  }
-
-  return changed;
-}
-
-function wallLengthCells(wall) {
-  if (!wall) return 0;
-  return Math.abs(wall.x2 - wall.x1) + Math.abs(wall.y2 - wall.y1);
-}
-
-export function trimWallExtensions(threshold = 2) {
-  let trims = 0;
-  const removeIndexes = new Set();
-
-  for (let i = 0; i < state.walls.length; i += 1) {
-    const wallA = state.walls[i];
-    if (!wallA) continue;
-
-    for (let j = i + 1; j < state.walls.length; j += 1) {
-      const wallB = state.walls[j];
-      if (!wallB) continue;
-
-      const point = intersectionPoint(wallA, wallB);
-      if (!point) continue;
-
-      const trimmedA = trimWallTowardsPoint(wallA, point, threshold);
-      const trimmedB = trimWallTowardsPoint(wallB, point, threshold);
-
-      if (trimmedA) trims += 1;
-      if (trimmedB) trims += 1;
-    }
-  }
-
-  state.walls.forEach((wall, index) => {
-    if (!wall) return;
-    if (wallLengthCells(wall) === 0) {
-      removeIndexes.add(index);
-    }
+    const normalizedPosition = orientationIncreasing
+      ? (center - range.start) / rangeLength
+      : (range.end - center) / rangeLength;
+    const clamped = Math.min(Math.max(normalizedPosition, 0), 1);
+    assigned.push({ ...feature, position: clamped });
   });
 
-  if (removeIndexes.size) {
-    state.walls = state.walls.filter((_, index) => !removeIndexes.has(index));
-    if (state.selectedWallIndex != null && removeIndexes.has(state.selectedWallIndex)) {
-      state.selectedWallIndex = null;
+  return assigned;
+}
+
+function buildSegmentFromRange(wall, span, range, projections) {
+  const rangeLength = range.end - range.start;
+  if (!(rangeLength > 0)) return null;
+
+  const features = assignFeaturesToRange(range, span, projections);
+
+  if (span.orientation === 'horizontal') {
+    const x1 = span.isIncreasing ? range.start : range.end;
+    const x2 = span.isIncreasing ? range.end : range.start;
+    return {
+      x1,
+      y1: wall.y1,
+      x2,
+      y2: wall.y2,
+      features,
+    };
+  }
+
+  const y1 = span.isIncreasing ? range.start : range.end;
+  const y2 = span.isIncreasing ? range.end : range.start;
+  return {
+    x1: wall.x1,
+    y1,
+    x2: wall.x2,
+    y2,
+    features,
+  };
+}
+
+function findTrimBounds(wallIndex, span, targetCoord) {
+  let leftBoundary = span.startCoord;
+  let rightBoundary = span.endCoord;
+  let touchesIntersection = false;
+
+  for (let i = 0; i < state.walls.length; i += 1) {
+    if (i === wallIndex) continue;
+    const other = state.walls[i];
+    if (!other) continue;
+
+    if (span.orientation === 'horizontal' && isVertical(other)) {
+      const minY = Math.min(other.y1, other.y2);
+      const maxY = Math.max(other.y1, other.y2);
+      if (span.constant < minY || span.constant > maxY) continue;
+      const x = other.x1;
+      if (x <= span.startCoord || x >= span.endCoord) continue;
+      if (x === targetCoord) {
+        touchesIntersection = true;
+      } else if (x < targetCoord) {
+        leftBoundary = Math.max(leftBoundary, x);
+      } else if (x > targetCoord) {
+        rightBoundary = Math.min(rightBoundary, x);
+      }
+    } else if (span.orientation === 'vertical' && isHorizontal(other)) {
+      const minX = Math.min(other.x1, other.x2);
+      const maxX = Math.max(other.x1, other.x2);
+      if (span.constant < minX || span.constant > maxX) continue;
+      const y = other.y1;
+      if (y <= span.startCoord || y >= span.endCoord) continue;
+      if (y === targetCoord) {
+        touchesIntersection = true;
+      } else if (y < targetCoord) {
+        leftBoundary = Math.max(leftBoundary, y);
+      } else if (y > targetCoord) {
+        rightBoundary = Math.min(rightBoundary, y);
+      }
     }
   }
 
-  return { trims, removed: removeIndexes.size };
+  return { leftBoundary, rightBoundary, touchesIntersection };
+}
+
+export function trimWallAtCell(wallIndex, point) {
+  const wall = state.walls[wallIndex];
+  if (!wall) {
+    return { trimmed: false, reason: 'missing-wall' };
+  }
+
+  const span = getWallSpan(wall);
+  if (!span) {
+    return { trimmed: false, reason: 'unsupported-wall' };
+  }
+
+  const targetCoordRaw = span.orientation === 'horizontal' ? point?.x : point?.y;
+  const targetCoord = Number.isFinite(targetCoordRaw) ? targetCoordRaw : null;
+  if (targetCoord == null) {
+    return { trimmed: false, reason: 'invalid-point' };
+  }
+
+  if (targetCoord <= span.startCoord || targetCoord >= span.endCoord) {
+    return { trimmed: false, reason: 'edge' };
+  }
+
+  const { leftBoundary, rightBoundary, touchesIntersection } = findTrimBounds(
+    wallIndex,
+    span,
+    targetCoord
+  );
+
+  if (touchesIntersection) {
+    return { trimmed: false, reason: 'intersection' };
+  }
+
+  if (rightBoundary - leftBoundary <= 0) {
+    return { trimmed: false, reason: 'no-span' };
+  }
+
+  const projections = projectWallFeatures(wall, span);
+
+  const segments = [];
+  if (leftBoundary > span.startCoord + 1e-6) {
+    const segment = buildSegmentFromRange(
+      wall,
+      span,
+      { start: span.startCoord, end: leftBoundary },
+      projections
+    );
+    if (segment) {
+      segments.push(segment);
+    }
+  }
+
+  if (rightBoundary < span.endCoord - 1e-6) {
+    const segment = buildSegmentFromRange(
+      wall,
+      span,
+      { start: rightBoundary, end: span.endCoord },
+      projections
+    );
+    if (segment) {
+      segments.push(segment);
+    }
+  }
+
+  const keptFeatures = segments.reduce((sum, segment) => sum + (segment.features?.length || 0), 0);
+  const removedFeatures = Math.max(projections.length - keptFeatures, 0);
+
+  const netChange = segments.length - 1;
+
+  state.walls.splice(wallIndex, 1, ...segments);
+
+  if (state.selectedWallIndex === wallIndex) {
+    state.selectedWallIndex = null;
+  } else if (state.selectedWallIndex != null && netChange !== 0 && state.selectedWallIndex > wallIndex) {
+    state.selectedWallIndex += netChange;
+  }
+
+  return {
+    trimmed: true,
+    removedCells: rightBoundary - leftBoundary,
+    resultingSegments: segments.length,
+    removedFeatures,
+  };
 }
