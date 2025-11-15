@@ -303,12 +303,141 @@ function computeGapSuggestions(existingSet, coverage, openWallIndexes) {
   return suggestions;
 }
 
+function computeEndpointSpanSuggestions(existingSet, coverage, openWallIndexes) {
+  const openIndexes =
+    openWallIndexes instanceof Set
+      ? openWallIndexes
+      : new Set(Array.isArray(openWallIndexes) ? openWallIndexes : []);
+
+  if (!openIndexes.size) {
+    return [];
+  }
+
+  const horizontalGroups = new Map();
+  const verticalGroups = new Map();
+
+  state.walls.forEach((wall, wallIndex) => {
+    if (!wall) return;
+    if (!openIndexes.has(wallIndex)) return;
+
+    if (isHorizontal(wall)) {
+      const points = [
+        { x: wall.x1, y: wall.y1 },
+        { x: wall.x2, y: wall.y2 },
+      ];
+      points.forEach((point) => {
+        const key = point.x;
+        if (!horizontalGroups.has(key)) {
+          horizontalGroups.set(key, []);
+        }
+        horizontalGroups.get(key).push({ ...point, wallIndex });
+      });
+    } else if (isVertical(wall)) {
+      const points = [
+        { x: wall.x1, y: wall.y1 },
+        { x: wall.x2, y: wall.y2 },
+      ];
+      points.forEach((point) => {
+        const key = point.y;
+        if (!verticalGroups.has(key)) {
+          verticalGroups.set(key, []);
+        }
+        verticalGroups.get(key).push({ ...point, wallIndex });
+      });
+    }
+  });
+
+  const suggestions = [];
+  const seenKeys = new Set();
+
+  horizontalGroups.forEach((entries, xValue) => {
+    if (!Array.isArray(entries) || entries.length < 2) return;
+    const sorted = entries
+      .slice()
+      .sort((a, b) => a.y - b.y);
+
+    for (let i = 0; i < sorted.length - 1; i += 1) {
+      const first = sorted[i];
+      for (let j = i + 1; j < sorted.length; j += 1) {
+        const second = sorted[j];
+        if (first.wallIndex === second.wallIndex) continue;
+        if (first.y === second.y) continue;
+
+        const candidate = normalizeWall({
+          x1: Number(xValue),
+          y1: first.y,
+          x2: Number(xValue),
+          y2: second.y,
+        });
+        if (!candidate) continue;
+
+        const key = wallKey(candidate);
+        if (!key || existingSet.has(key) || seenKeys.has(key)) continue;
+        if (isWallCovered(candidate, coverage)) continue;
+
+        seenKeys.add(key);
+        suggestions.push({
+          type: 'endpoint-span',
+          description: 'Connect the open walls to close the loop.',
+          walls: [candidate],
+          anchor: {
+            x: candidate.x1,
+            y: (candidate.y1 + candidate.y2) / 2,
+          },
+        });
+      }
+    }
+  });
+
+  verticalGroups.forEach((entries, yValue) => {
+    if (!Array.isArray(entries) || entries.length < 2) return;
+    const sorted = entries
+      .slice()
+      .sort((a, b) => a.x - b.x);
+
+    for (let i = 0; i < sorted.length - 1; i += 1) {
+      const first = sorted[i];
+      for (let j = i + 1; j < sorted.length; j += 1) {
+        const second = sorted[j];
+        if (first.wallIndex === second.wallIndex) continue;
+        if (first.x === second.x) continue;
+
+        const candidate = normalizeWall({
+          x1: first.x,
+          y1: Number(yValue),
+          x2: second.x,
+          y2: Number(yValue),
+        });
+        if (!candidate) continue;
+
+        const key = wallKey(candidate);
+        if (!key || existingSet.has(key) || seenKeys.has(key)) continue;
+        if (isWallCovered(candidate, coverage)) continue;
+
+        seenKeys.add(key);
+        suggestions.push({
+          type: 'endpoint-span',
+          description: 'Connect the open walls to close the loop.',
+          walls: [candidate],
+          anchor: {
+            x: (candidate.x1 + candidate.x2) / 2,
+            y: candidate.y1,
+          },
+        });
+      }
+    }
+  });
+
+  return suggestions;
+}
+
 export function recomputeSuggestions() {
   const { set: existingSet, coverage } = buildExistingWallIndex();
   const openIndexes = state.openWallIndexes instanceof Set ? state.openWallIndexes : new Set();
   const suggestions = [
     ...computeCornerSuggestions(existingSet, coverage, openIndexes),
     ...computeGapSuggestions(existingSet, coverage, openIndexes),
+    ...computeEndpointSpanSuggestions(existingSet, coverage, openIndexes),
   ];
   state.suggestions = suggestions;
   return suggestions;
