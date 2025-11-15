@@ -30,18 +30,113 @@ function wallKey(wall) {
   return `${normalized.x1},${normalized.y1}-${normalized.x2},${normalized.y2}`;
 }
 
-function buildExistingWallSet() {
+function createAxisInterval(wall) {
+  if (!wall) return null;
+  if (isHorizontal(wall)) {
+    return {
+      orientation: 'horizontal',
+      constant: wall.y1,
+      start: Math.min(wall.x1, wall.x2),
+      end: Math.max(wall.x1, wall.x2),
+    };
+  }
+  if (isVertical(wall)) {
+    return {
+      orientation: 'vertical',
+      constant: wall.x1,
+      start: Math.min(wall.y1, wall.y2),
+      end: Math.max(wall.y1, wall.y2),
+    };
+  }
+  return null;
+}
+
+function mergeIntervals(intervals) {
+  if (!Array.isArray(intervals) || intervals.length === 0) return [];
+  const sorted = intervals
+    .map((segment) => ({ start: segment.start, end: segment.end }))
+    .filter((segment) => Number.isFinite(segment.start) && Number.isFinite(segment.end))
+    .sort((a, b) => a.start - b.start);
+
+  if (!sorted.length) return [];
+
+  const merged = [sorted[0]];
+
+  for (let i = 1; i < sorted.length; i += 1) {
+    const current = sorted[i];
+    const last = merged[merged.length - 1];
+    if (current.start <= last.end) {
+      last.end = Math.max(last.end, current.end);
+    } else {
+      merged.push({ start: current.start, end: current.end });
+    }
+  }
+
+  return merged;
+}
+
+function buildExistingWallIndex() {
   const set = new Set();
+  const coverage = {
+    horizontal: new Map(),
+    vertical: new Map(),
+  };
+
   state.walls.forEach((wall) => {
     const key = wallKey(wall);
     if (key) {
       set.add(key);
     }
+
+    const interval = createAxisInterval(wall);
+    if (!interval) return;
+
+    const map = interval.orientation === 'horizontal' ? coverage.horizontal : coverage.vertical;
+    if (!map.has(interval.constant)) {
+      map.set(interval.constant, []);
+    }
+    map.get(interval.constant).push({ start: interval.start, end: interval.end });
   });
-  return set;
+
+  coverage.horizontal.forEach((intervals, key) => {
+    coverage.horizontal.set(key, mergeIntervals(intervals));
+  });
+  coverage.vertical.forEach((intervals, key) => {
+    coverage.vertical.set(key, mergeIntervals(intervals));
+  });
+
+  return { set, coverage };
 }
 
-function computeCornerSuggestions(existingSet) {
+function isWallCovered(wall, coverage) {
+  if (!coverage) return false;
+  const interval = createAxisInterval(wall);
+  if (!interval) return false;
+
+  const map = interval.orientation === 'horizontal' ? coverage.horizontal : coverage.vertical;
+  if (!map) return false;
+  const segments = map.get(interval.constant);
+  if (!Array.isArray(segments) || segments.length === 0) return false;
+
+  let cursor = interval.start;
+  for (let i = 0; i < segments.length; i += 1) {
+    const segment = segments[i];
+    if (segment.end <= cursor) {
+      continue;
+    }
+    if (segment.start > cursor) {
+      return false;
+    }
+    if (segment.end >= interval.end) {
+      return true;
+    }
+    cursor = segment.end;
+  }
+
+  return false;
+}
+
+function computeCornerSuggestions(existingSet, coverage) {
   const endpointMap = new Map();
 
   state.walls.forEach((wall, wallIndex) => {
@@ -99,7 +194,8 @@ function computeCornerSuggestions(existingSet) {
         const candidates = [verticalCompletion, horizontalCompletion]
           .map((candidate) => normalizeWall(candidate))
           .filter((candidate) => candidate && Math.abs(candidate.x1 - candidate.x2) + Math.abs(candidate.y1 - candidate.y2) > 0)
-          .filter((candidate) => !existingSet.has(wallKey(candidate)));
+          .filter((candidate) => !existingSet.has(wallKey(candidate)))
+          .filter((candidate) => !isWallCovered(candidate, coverage));
 
         if (!candidates.length) return;
 
@@ -124,7 +220,7 @@ function computeCornerSuggestions(existingSet) {
   return suggestions;
 }
 
-function computeGapSuggestions(existingSet) {
+function computeGapSuggestions(existingSet, coverage) {
   const suggestions = [];
   const seenKeys = new Set();
   const gapThreshold = 2;
@@ -158,7 +254,7 @@ function computeGapSuggestions(existingSet) {
         if (gap > 0 && gap <= gapThreshold) {
           const candidate = { x1: left.x2, y1: left.y1, x2: right.x1, y2: left.y1 };
           const key = wallKey(candidate);
-          if (key && !existingSet.has(key) && !seenKeys.has(key)) {
+          if (key && !existingSet.has(key) && !seenKeys.has(key) && !isWallCovered(candidate, coverage)) {
             seenKeys.add(key);
             suggestions.push({
               type: 'gap',
@@ -180,7 +276,7 @@ function computeGapSuggestions(existingSet) {
         if (gap > 0 && gap <= gapThreshold) {
           const candidate = { x1: top.x1, y1: top.y2, x2: top.x1, y2: bottom.y1 };
           const key = wallKey(candidate);
-          if (key && !existingSet.has(key) && !seenKeys.has(key)) {
+          if (key && !existingSet.has(key) && !seenKeys.has(key) && !isWallCovered(candidate, coverage)) {
             seenKeys.add(key);
             suggestions.push({
               type: 'gap',
@@ -197,10 +293,10 @@ function computeGapSuggestions(existingSet) {
 }
 
 export function recomputeSuggestions() {
-  const existingSet = buildExistingWallSet();
+  const { set: existingSet, coverage } = buildExistingWallIndex();
   const suggestions = [
-    ...computeCornerSuggestions(existingSet),
-    ...computeGapSuggestions(existingSet),
+    ...computeCornerSuggestions(existingSet, coverage),
+    ...computeGapSuggestions(existingSet, coverage),
   ];
   state.suggestions = suggestions;
   return suggestions;
