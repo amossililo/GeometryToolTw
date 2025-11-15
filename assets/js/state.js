@@ -27,6 +27,8 @@ export const pointerSession = {
   wallIndex: null,
   initialWall: null,
   startPoint: null,
+  undoSnapshot: null,
+  undoCaptured: false,
 };
 
 export const colors = {
@@ -36,7 +38,7 @@ export const colors = {
   wallActive: '#2563eb',
   wallOpen: '#dc2626',
   wallText: 'rgba(17,24,39,0.85)',
-  suggestion: '#22c55e',
+  suggestion: '#dc2626',
   windowStroke: '#0284c7',
   windowFill: 'rgba(14,165,233,0.35)',
   windowCrossbar: '#0ea5e9',
@@ -53,6 +55,8 @@ export function resetPointerSession() {
   pointerSession.wallIndex = null;
   pointerSession.initialWall = null;
   pointerSession.startPoint = null;
+  pointerSession.undoSnapshot = null;
+  pointerSession.undoCaptured = false;
   state.isDrawing = false;
   state.preview = null;
 }

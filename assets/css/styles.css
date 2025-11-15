@@ -364,6 +364,54 @@ main {
   min-height: 420px;
 }
 
+.suggestion-buttons {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.suggestion-button {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  background: #dc2626;
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 6px 18px rgba(220, 38, 38, 0.25);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.suggestion-button:hover,
+.suggestion-button:focus {
+  background: #b91c1c;
+  box-shadow: 0 10px 24px rgba(185, 28, 28, 0.35);
+  transform: translate(-50%, -50%) scale(1.04);
+}
+
+.suggestion-button:focus {
+  outline: 2px solid rgba(255, 255, 255, 0.8);
+  outline-offset: 1px;
+}
+
+.suggestion-button__icon {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.suggestion-button__text {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 canvas {
   width: 100%;
   height: 100%;
@@ -384,6 +432,7 @@ canvas {
   display: grid;
   gap: 10px;
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.22);
+  z-index: 3;
 }
 
 .metrics-overlay h2 {

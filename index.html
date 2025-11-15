@@ -46,10 +46,15 @@
         </button>
         <button id="offsetWallButton" class="command-button" type="button" disabled>Offset wall</button>
         <button id="undoButton" class="command-button" type="button">Undo</button>
-        <button id="applySuggestionsButton" class="command-button" type="button" disabled>
-          Apply auto-complete
+        <button
+          id="trimWallsButton"
+          class="command-button"
+          type="button"
+          data-tool="trim"
+          aria-pressed="false"
+        >
+          Trim wall
         </button>
-        <button id="trimWallsButton" class="command-button" type="button">Trim wall ends</button>
         <button id="eraseButton" class="command-button" type="button" disabled>Erase selected</button>
         <button id="clearButton" class="command-button" type="button">Clear plan</button>
         <button id="downloadButton" class="command-button" type="button">Download PNG</button>
@@ -145,6 +150,7 @@
             <ol class="instructions-list">
               <li>Use <strong>Draw walls</strong> to drag horizontal or vertical walls on the grid.</li>
               <li>Select <strong>Move walls</strong> to pick and drag an existing wall segment.</li>
+              <li>Choose <strong>Trim wall</strong> to erase the span between corners—click a wall segment where you want the break.</li>
               <li>Use <strong>Insert window</strong> or <strong>Insert door</strong> to add openings, then click a wall to place them.</li>
               <li>Use <strong>Offset wall</strong> to duplicate the selected wall at a specified distance.</li>
               <li>Undo removes the latest wall, <strong>Erase selected</strong> deletes a chosen wall, <strong>Delete openings</strong> clears windows and doors on the selected wall, and <strong>Clear plan</strong> starts fresh.</li>
@@ -160,6 +166,7 @@
       <main>
         <div class="canvas-wrapper">
           <canvas id="planCanvas" aria-label="Plan canvas"></canvas>
+          <div id="suggestionButtons" class="suggestion-buttons" aria-live="polite"></div>
           <section class="metrics-overlay" aria-label="Live metrics" aria-live="polite">
             <h2>Live metrics</h2>
             <div class="metrics">
