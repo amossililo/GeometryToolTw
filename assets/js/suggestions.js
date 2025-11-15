@@ -206,6 +206,32 @@ export function recomputeSuggestions() {
   return suggestions;
 }
 
+function applyWalls(walls) {
+  let added = 0;
+  let adjusted = 0;
+  let skipped = 0;
+
+  const safeWalls = Array.isArray(walls) ? walls : [];
+  safeWalls.forEach((wall) => {
+    if (!wall) {
+      skipped += 1;
+      return;
+    }
+
+    const result = addWallToState(wall);
+    if (result.addedSegments > 0) {
+      added += result.addedSegments;
+      if (result.removedCells > 0) {
+        adjusted += 1;
+      }
+    } else {
+      skipped += 1;
+    }
+  });
+
+  return { added, adjusted, skipped };
+}
+
 export function applySuggestions() {
   if (!Array.isArray(state.suggestions) || state.suggestions.length === 0) {
     return { applied: false, added: 0, adjusted: 0, skipped: 0 };
@@ -216,23 +242,65 @@ export function applySuggestions() {
   let skipped = 0;
 
   state.suggestions.forEach((suggestion) => {
-    const walls = Array.isArray(suggestion?.walls) ? suggestion.walls : [];
-    walls.forEach((wall) => {
-      const result = addWallToState(wall);
-      if (result.addedSegments > 0) {
-        added += result.addedSegments;
-        if (result.removedCells > 0) {
-          adjusted += 1;
-        }
-      } else {
-        skipped += 1;
-      }
-    });
+    const result = applyWalls(suggestion?.walls);
+    added += result.added;
+    adjusted += result.adjusted;
+    skipped += result.skipped;
   });
 
   state.suggestions = [];
 
   return { applied: added > 0, added, adjusted, skipped };
+}
+
+export function applySuggestionAtIndex(index) {
+  if (!Array.isArray(state.suggestions) || index == null) {
+    return { applied: false, added: 0, adjusted: 0, skipped: 0 };
+  }
+
+  const numericIndex = Number(index);
+  if (!Number.isInteger(numericIndex) || numericIndex < 0 || numericIndex >= state.suggestions.length) {
+    return { applied: false, added: 0, adjusted: 0, skipped: 0 };
+  }
+
+  const suggestion = state.suggestions[numericIndex];
+  const result = applyWalls(suggestion?.walls);
+  state.suggestions.splice(numericIndex, 1);
+
+  return { applied: result.added > 0, ...result };
+}
+
+export function applySuggestionWall(suggestionIndex, wallIndex) {
+  if (!Array.isArray(state.suggestions)) {
+    return { applied: false, added: 0, adjusted: 0, skipped: 0 };
+  }
+
+  const numericSuggestionIndex = Number(suggestionIndex);
+  const numericWallIndex = Number(wallIndex);
+
+  if (
+    !Number.isInteger(numericSuggestionIndex) ||
+    !Number.isInteger(numericWallIndex) ||
+    numericSuggestionIndex < 0 ||
+    numericSuggestionIndex >= state.suggestions.length
+  ) {
+    return { applied: false, added: 0, adjusted: 0, skipped: 0 };
+  }
+
+  const suggestion = state.suggestions[numericSuggestionIndex];
+  const walls = Array.isArray(suggestion?.walls) ? suggestion.walls : null;
+  if (!walls || numericWallIndex < 0 || numericWallIndex >= walls.length) {
+    return { applied: false, added: 0, adjusted: 0, skipped: 0 };
+  }
+
+  const [wall] = walls.splice(numericWallIndex, 1);
+  const result = applyWalls([wall]);
+
+  if (walls.length === 0) {
+    state.suggestions.splice(numericSuggestionIndex, 1);
+  }
+
+  return { applied: result.added > 0, ...result };
 }
 
 export function getSuggestionCount() {

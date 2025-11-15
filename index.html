@@ -46,9 +46,6 @@
         </button>
         <button id="offsetWallButton" class="command-button" type="button" disabled>Offset wall</button>
         <button id="undoButton" class="command-button" type="button">Undo</button>
-        <button id="applySuggestionsButton" class="command-button" type="button" disabled>
-          Apply auto-complete
-        </button>
         <button id="trimWallsButton" class="command-button" type="button">Trim wall ends</button>
         <button id="eraseButton" class="command-button" type="button" disabled>Erase selected</button>
         <button id="clearButton" class="command-button" type="button">Clear plan</button>
@@ -160,6 +157,7 @@
       <main>
         <div class="canvas-wrapper">
           <canvas id="planCanvas" aria-label="Plan canvas"></canvas>
+          <div id="suggestionButtons" class="suggestion-buttons" aria-live="polite"></div>
           <section class="metrics-overlay" aria-label="Live metrics" aria-live="polite">
             <h2>Live metrics</h2>
             <div class="metrics">
