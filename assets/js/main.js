@@ -6,7 +6,6 @@ import { computeConnectivity } from './connectivity.js';
 import { createMetricsManager, computeMetricsSnapshot } from './metrics.js';
 import { selectedWallHasOpenings, getOpeningPreset, setOpeningPreset } from './openings.js';
 import { recomputeSuggestions, applySuggestionWall, getSuggestionCount } from './suggestions.js';
-import { trimWallExtensions } from './trimming.js';
 
 const DEFAULT_SHEETS_WEB_APP_URL =
   'https://script.google.com/macros/s/AKfycbxXBv-LEIhYb0KbWuhRYRu_6wl3_mk6hqcdA5Y_uXXiXP3gnFvbDuzA8MBIWTPxLSvE/exec';
@@ -87,7 +86,13 @@ const boqProgressSteps = boqPrompt
     }
   : {};
 
-const toolButtons = [drawToolButton, moveToolButton, windowToolButton, doorToolButton].filter(Boolean);
+const toolButtons = [
+  drawToolButton,
+  moveToolButton,
+  trimWallsButton,
+  windowToolButton,
+  doorToolButton,
+].filter(Boolean);
 
 const drawing = createCanvasDrawing(canvas);
 const metricsManager = createMetricsManager({
@@ -334,6 +339,11 @@ function setActiveTool(tool) {
 
   if (tool === 'move') {
     showCommandHint('Click a wall, then drag to reposition it. Use Draw walls to sketch new segments.', 'info');
+    return;
+  }
+
+  if (tool === 'trim') {
+    showCommandHint('Trim Wall tool ready. Click a wall span to remove it between corners.', 'info');
     return;
   }
 
@@ -1088,25 +1098,8 @@ if (offsetWallButton) {
 
 if (trimWallsButton) {
   trimWallsButton.addEventListener('click', () => {
-    const result = trimWallExtensions();
-    if (result.trims > 0 || result.removed > 0) {
-      const parts = [];
-      if (result.trims > 0) {
-        parts.push(
-          `${result.trims} wall ${result.trims === 1 ? 'end' : 'ends'} trimmed`
-        );
-      }
-      if (result.removed > 0) {
-        parts.push(
-          `${result.removed} short ${result.removed === 1 ? 'wall' : 'walls'} removed`
-        );
-      }
-      const message = parts.join(' and ');
-      showCommandHint(`${message}.`, 'success');
-      handleWallsChanged();
-    } else {
-      showCommandHint('No nearby intersections were close enough to trim.', 'info');
-    }
+    closeOpeningPrompt({ focusTrigger: false });
+    setActiveTool('trim');
   });
 }
 
