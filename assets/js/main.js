@@ -5,8 +5,7 @@ import { createWallActions } from './wallActions.js';
 import { computeConnectivity } from './connectivity.js';
 import { createMetricsManager, computeMetricsSnapshot } from './metrics.js';
 import { selectedWallHasOpenings, getOpeningPreset, setOpeningPreset } from './openings.js';
-import { recomputeSuggestions, applySuggestions, getSuggestionCount } from './suggestions.js';
-import { trimWallExtensions } from './trimming.js';
+import { recomputeSuggestions, applySuggestionWall, getSuggestionCount } from './suggestions.js';
 
 const DEFAULT_SHEETS_WEB_APP_URL =
   'https://script.google.com/macros/s/AKfycbxXBv-LEIhYb0KbWuhRYRu_6wl3_mk6hqcdA5Y_uXXiXP3gnFvbDuzA8MBIWTPxLSvE/exec';
@@ -36,8 +35,8 @@ const downloadButton = document.getElementById('downloadButton');
 const clearOpeningsButton = document.getElementById('clearOpeningsButton');
 const generateBoqButton = document.getElementById('generateBoqButton');
 const offsetWallButton = document.getElementById('offsetWallButton');
-const applySuggestionsButton = document.getElementById('applySuggestionsButton');
 const trimWallsButton = document.getElementById('trimWallsButton');
+const suggestionButtonsLayer = document.getElementById('suggestionButtons');
 
 const sheetsUrlInput = document.getElementById('sheetsUrl');
 const sheetsStatusEl = document.getElementById('sheetsStatus');
@@ -61,6 +60,28 @@ const snapToggleButton = document.getElementById('snapToggleButton');
 const instructionsToggle = document.getElementById('instructionsToggle');
 const instructionsCard = document.querySelector('.instructions-card');
 const instructionsContent = document.getElementById('instructionsContent');
+const instructionsHelpButton = document.getElementById('instructionsHelpButton');
+const instructionsDialog = document.getElementById('instructionsDialog');
+const instructionsDialogBody = instructionsDialog?.querySelector('.instructions-dialog__body');
+const instructionsDialogClose = document.getElementById('instructionsDialogClose');
+
+const supportsInstructionsDialog =
+  instructionsDialog instanceof HTMLDialogElement && typeof instructionsDialog.showModal === 'function';
+
+if (supportsInstructionsDialog) {
+  document.documentElement.classList.add('has-instructions-dialog');
+  if (instructionsDialogBody && instructionsContent) {
+    instructionsDialogBody.innerHTML = instructionsContent.innerHTML;
+  }
+  if (instructionsHelpButton) {
+    instructionsHelpButton.hidden = false;
+  }
+} else {
+  document.documentElement.classList.remove('has-instructions-dialog');
+  if (instructionsHelpButton) {
+    instructionsHelpButton.hidden = true;
+  }
+}
 
 let instructionsCollapsedForMobile = true;
 const mobileInstructionsMedia =
@@ -87,7 +108,13 @@ const boqProgressSteps = boqPrompt
     }
   : {};
 
-const toolButtons = [drawToolButton, moveToolButton, windowToolButton, doorToolButton].filter(Boolean);
+const toolButtons = [
+  drawToolButton,
+  moveToolButton,
+  trimWallsButton,
+  windowToolButton,
+  doorToolButton,
+].filter(Boolean);
 
 const drawing = createCanvasDrawing(canvas);
 const metricsManager = createMetricsManager({
@@ -179,15 +206,99 @@ function updateOffsetButton() {
   offsetWallButton.disabled = state.selectedWallIndex == null;
 }
 
-function updateApplySuggestionsButton() {
-  if (!applySuggestionsButton) return;
-  const suggestionCount = getSuggestionCount();
-  applySuggestionsButton.disabled = suggestionCount === 0;
-  if (suggestionCount === 0) {
-    applySuggestionsButton.textContent = 'Apply auto-complete';
+function getSuggestionButtonPosition(wall) {
+  if (!wall || !drawing) return null;
+  const px = drawing.wallToPixels(wall);
+  if (!px) return null;
+  return {
+    x: (px.x1 + px.x2) / 2,
+    y: (px.y1 + px.y2) / 2,
+  };
+}
+
+function applySuggestionFromButton(target) {
+  const button = target instanceof HTMLElement ? target : null;
+  if (!button) return;
+
+  if (button instanceof HTMLButtonElement) {
+    button.disabled = true;
+  }
+
+  const result = applySuggestionWall(button.dataset.suggestionIndex, button.dataset.wallIndex);
+
+  if (result.applied) {
+    const label = result.added === 1 ? 'line' : 'lines';
+    const parts = [`Added ${result.added} auto-complete ${label}.`];
+    if (result.adjusted > 0) {
+      parts.push(
+        `${result.adjusted} segment${result.adjusted === 1 ? ' was' : 's were'} trimmed to avoid overlaps.`
+      );
+    }
+    if (result.skipped > 0) {
+      parts.push(
+        `${result.skipped} overlapping suggestion${result.skipped === 1 ? ' was' : 's were'} skipped.`
+      );
+    }
+    showCommandHint(parts.join(' '), 'success');
   } else {
-    const label = suggestionCount === 1 ? 'line' : 'lines';
-    applySuggestionsButton.textContent = `Apply ${suggestionCount} auto-complete ${label}`;
+    const message =
+      result.skipped > 0
+        ? 'That auto-complete overlaps an existing wall, so nothing was added.'
+        : 'We could not apply that auto-complete suggestion.';
+    showCommandHint(message, 'info');
+  }
+
+  handleWallsChanged();
+}
+
+function updateSuggestionButtons() {
+  if (!suggestionButtonsLayer) return;
+
+  suggestionButtonsLayer.innerHTML = '';
+
+  if (!Array.isArray(state.suggestions) || state.suggestions.length === 0) {
+    suggestionButtonsLayer.classList.remove('is-active');
+    suggestionButtonsLayer.setAttribute('hidden', '');
+    return;
+  }
+
+  const renderedKeys = new Set();
+
+  state.suggestions.forEach((suggestion, suggestionIndex) => {
+    const walls = Array.isArray(suggestion?.walls) ? suggestion.walls : [];
+    walls.forEach((wall, wallIndex) => {
+      if (!wall) return;
+      const key = `${wall.x1},${wall.y1}-${wall.x2},${wall.y2}`;
+      if (renderedKeys.has(key)) return;
+      renderedKeys.add(key);
+
+      const position = getSuggestionButtonPosition(wall);
+      if (!position) return;
+
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'suggestion-button';
+      button.dataset.suggestionIndex = String(suggestionIndex);
+      button.dataset.wallIndex = String(wallIndex);
+      button.style.left = `${position.x}px`;
+      button.style.top = `${position.y}px`;
+      button.innerHTML =
+        '<span class="suggestion-button__icon" aria-hidden="true">✓</span>' +
+        '<span class="suggestion-button__text">Autocomplete</span>';
+      button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        applySuggestionFromButton(event.currentTarget);
+      });
+      suggestionButtonsLayer.appendChild(button);
+    });
+  });
+
+  const hasButtons = suggestionButtonsLayer.childElementCount > 0;
+  suggestionButtonsLayer.classList.toggle('is-active', hasButtons);
+  if (hasButtons) {
+    suggestionButtonsLayer.removeAttribute('hidden');
+  } else {
+    suggestionButtonsLayer.setAttribute('hidden', '');
   }
 }
 
@@ -225,18 +336,34 @@ function setInstructionsCollapsed(collapsed, options = {}) {
 
 function applyInstructionsLayout() {
   if (!instructionsCard || !instructionsContent || !instructionsToggle) return;
+  const isMobile = Boolean(mobileInstructionsMedia && mobileInstructionsMedia.matches);
+  if (supportsInstructionsDialog && isMobile) {
+    instructionsToggle.hidden = true;
+    setInstructionsCollapsed(false, { skipStore: true });
+    return;
+  }
   if (!mobileInstructionsMedia) {
     instructionsToggle.hidden = true;
     setInstructionsCollapsed(false, { skipStore: true });
     return;
   }
-  if (mobileInstructionsMedia.matches) {
+  if (isMobile) {
     instructionsToggle.hidden = false;
     setInstructionsCollapsed(instructionsCollapsedForMobile, { skipStore: true });
   } else {
     instructionsToggle.hidden = true;
     setInstructionsCollapsed(false, { skipStore: true });
   }
+}
+
+function handleInstructionsMediaChange(event) {
+  if (!mobileInstructionsMedia) return;
+  const matches =
+    typeof event?.matches === 'boolean' ? event.matches : Boolean(mobileInstructionsMedia.matches);
+  if (supportsInstructionsDialog && instructionsDialog?.open && matches === false) {
+    instructionsDialog.close();
+  }
+  applyInstructionsLayout();
 }
 
 function setActiveTool(tool) {
@@ -250,6 +377,11 @@ function setActiveTool(tool) {
 
   if (tool === 'move') {
     showCommandHint('Click a wall, then drag to reposition it. Use Draw walls to sketch new segments.', 'info');
+    return;
+  }
+
+  if (tool === 'trim') {
+    showCommandHint('Trim Wall tool ready. Click a wall span to remove it between corners.', 'info');
     return;
   }
 
@@ -421,17 +553,17 @@ function handleWallsChanged() {
   updateClearOpeningsButton();
   updateOffsetButton();
   recomputeSuggestions();
-  updateApplySuggestionsButton();
   const suggestionCount = getSuggestionCount();
   if (suggestionCount > 0 && lastSuggestionCount === 0) {
     const label = suggestionCount === 1 ? 'line' : 'lines';
     showCommandHint(
-      `Auto-complete ready – use Apply auto-complete to add ${suggestionCount} ${label}.`,
+      `Auto-complete ready – click ✓ Autocomplete on ${suggestionCount} highlighted ${label}.`,
       'success'
     );
   }
   lastSuggestionCount = suggestionCount;
   drawing.draw();
+  updateSuggestionButtons();
 
   if (sheetsExporter && typeof sheetsExporter.setLatestMetrics === 'function') {
     sheetsExporter.setLatestMetrics(metrics);
@@ -769,10 +901,46 @@ if (instructionsToggle) {
   });
 }
 
+if (instructionsHelpButton && supportsInstructionsDialog && instructionsDialog) {
+  instructionsHelpButton.addEventListener('click', () => {
+    if (instructionsDialog.open) return;
+    instructionsDialog.showModal();
+    instructionsHelpButton.setAttribute('aria-expanded', 'true');
+    const focusTarget = instructionsDialogClose || instructionsDialogBody;
+    focusTarget?.focus?.();
+  });
+}
+
+if (instructionsDialogClose && supportsInstructionsDialog && instructionsDialog) {
+  instructionsDialogClose.addEventListener('click', () => {
+    instructionsDialog.close();
+  });
+}
+
+if (instructionsDialog && supportsInstructionsDialog) {
+  instructionsDialog.addEventListener('close', () => {
+    instructionsHelpButton?.setAttribute('aria-expanded', 'false');
+    if (instructionsHelpButton && instructionsHelpButton.offsetParent !== null) {
+      instructionsHelpButton.focus();
+    }
+  });
+
+  instructionsDialog.addEventListener('cancel', (event) => {
+    event.preventDefault();
+    instructionsDialog.close();
+  });
+
+  instructionsDialog.addEventListener('click', (event) => {
+    if (event.target === instructionsDialog) {
+      instructionsDialog.close();
+    }
+  });
+}
+
 if (typeof mobileInstructionsMedia?.addEventListener === 'function') {
-  mobileInstructionsMedia.addEventListener('change', applyInstructionsLayout);
+  mobileInstructionsMedia.addEventListener('change', handleInstructionsMediaChange);
 } else if (typeof mobileInstructionsMedia?.addListener === 'function') {
-  mobileInstructionsMedia.addListener(applyInstructionsLayout);
+  mobileInstructionsMedia.addListener(handleInstructionsMediaChange);
 }
 
 if (drawToolButton) {
@@ -853,7 +1021,6 @@ if (boqDownloadButton) {
         throw new Error('Popup blocked or window was not created.');
       }
     } catch (downloadError) {
-      updateBoqProgress('compile', 'error');
       if (boqPromptDescription) {
         boqPromptDescription.textContent =
           'We could not open the BOQ link automatically. Copy the link from the response preview or adjust your popup settings.';
@@ -1002,55 +1169,10 @@ if (offsetWallButton) {
   });
 }
 
-if (applySuggestionsButton) {
-  applySuggestionsButton.addEventListener('click', () => {
-    const result = applySuggestions();
-    if (result.applied) {
-      const label = result.added === 1 ? 'line' : 'lines';
-      const parts = [`Added ${result.added} auto-complete ${label}.`];
-      if (result.adjusted > 0) {
-        parts.push(
-          `${result.adjusted} suggestion${result.adjusted === 1 ? '' : 's'} were trimmed to avoid overlaps.`
-        );
-      }
-      if (result.skipped > 0) {
-        parts.push(
-          `${result.skipped} overlapping suggestion${result.skipped === 1 ? ' was' : 's were'} skipped.`
-        );
-      }
-      showCommandHint(parts.join(' '), 'success');
-      handleWallsChanged();
-    } else {
-      const message =
-        result.skipped > 0
-          ? 'All auto-complete suggestions overlapped existing walls, so nothing was added.'
-          : 'No auto-complete suggestions are ready yet.';
-      showCommandHint(message, 'info');
-    }
-  });
-}
-
 if (trimWallsButton) {
   trimWallsButton.addEventListener('click', () => {
-    const result = trimWallExtensions();
-    if (result.trims > 0 || result.removed > 0) {
-      const parts = [];
-      if (result.trims > 0) {
-        parts.push(
-          `${result.trims} wall ${result.trims === 1 ? 'end' : 'ends'} trimmed`
-        );
-      }
-      if (result.removed > 0) {
-        parts.push(
-          `${result.removed} short ${result.removed === 1 ? 'wall' : 'walls'} removed`
-        );
-      }
-      const message = parts.join(' and ');
-      showCommandHint(`${message}.`, 'success');
-      handleWallsChanged();
-    } else {
-      showCommandHint('No nearby intersections were close enough to trim.', 'info');
-    }
+    closeOpeningPrompt({ focusTrigger: false });
+    setActiveTool('trim');
   });
 }
 
@@ -1281,6 +1403,7 @@ window.addEventListener('keydown', (evt) => {
 
 window.addEventListener('resize', () => {
   drawing.resizeCanvas();
+  updateSuggestionButtons();
 });
 
 drawing.resizeCanvas();
