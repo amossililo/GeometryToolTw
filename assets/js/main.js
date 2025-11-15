@@ -947,7 +947,6 @@ if (boqDownloadButton) {
         throw new Error('Popup blocked or window was not created.');
       }
     } catch (downloadError) {
-      updateBoqProgress('compile', 'error');
       if (boqPromptDescription) {
         boqPromptDescription.textContent =
           'We could not open the BOQ link automatically. Copy the link from the response preview or adjust your popup settings.';
