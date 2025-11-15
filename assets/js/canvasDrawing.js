@@ -107,7 +107,7 @@ export function createCanvasDrawing(canvas) {
   function drawSuggestions() {
     if (!Array.isArray(state.suggestions) || state.suggestions.length === 0) return;
 
-    const suggestionColor = colors.suggestion || '#22c55e';
+    const suggestionColor = colors.suggestion || '#dc2626';
     const rendered = new Set();
 
     ctx.save();

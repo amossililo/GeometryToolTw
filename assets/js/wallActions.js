@@ -1,22 +1,22 @@
 import { state } from './state.js';
 import { addWallToState } from './wallUtils.js';
+import { pushUndoSnapshot, restoreLastSnapshot, discardUndoSnapshot } from './history.js';
+import { clearOpeningsFromWall } from './openings.js';
 
 export function createWallActions({
   onWallsChanged = () => {},
   onSelectionChanged = () => {},
 }) {
   function undoLast() {
-    if (state.walls.length === 0) return;
-    state.walls.pop();
-    if (state.selectedWallIndex != null && state.selectedWallIndex >= state.walls.length) {
-      state.selectedWallIndex = null;
-      onSelectionChanged();
-    }
+    const restored = restoreLastSnapshot();
+    if (!restored) return;
+    onSelectionChanged();
     onWallsChanged();
   }
 
   function clearAll() {
     if (state.walls.length === 0) return;
+    pushUndoSnapshot();
     state.walls = [];
     state.selectedWallIndex = null;
     state.preview = null;
@@ -26,6 +26,7 @@ export function createWallActions({
 
   function eraseSelected() {
     if (state.selectedWallIndex == null) return;
+    pushUndoSnapshot();
     state.walls.splice(state.selectedWallIndex, 1);
     state.selectedWallIndex = null;
     onSelectionChanged();
@@ -35,11 +36,10 @@ export function createWallActions({
   function clearOpenings() {
     const index = state.selectedWallIndex;
     if (index == null) return false;
-    const wall = state.walls[index];
-    if (!wall || !Array.isArray(wall.features) || wall.features.length === 0) {
+    const cleared = clearOpeningsFromWall(index);
+    if (!cleared) {
       return false;
     }
-    wall.features = [];
     onWallsChanged();
     return true;
   }
@@ -79,9 +79,11 @@ export function createWallActions({
       features: [],
     };
 
+    const checkpoint = pushUndoSnapshot();
     const result = addWallToState(newWall);
 
     if (result.addedSegments === 0) {
+      discardUndoSnapshot(checkpoint);
       return { success: false, reason: 'overlap' };
     }
 
