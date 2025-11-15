@@ -133,17 +133,6 @@
           </p>
         </header>
 
-        <button
-          id="instructionsHelpButton"
-          class="instructions-help-button"
-          type="button"
-          aria-haspopup="dialog"
-          aria-controls="instructionsDialog"
-          aria-expanded="false"
-          hidden
-        >
-          Show help
-        </button>
         <dialog id="instructionsDialog" class="instructions-dialog" aria-labelledby="instructionsDialogTitle">
           <div class="instructions-dialog__container" role="document">
             <header class="instructions-dialog__header">
@@ -193,6 +182,19 @@
 
       <main>
         <div class="canvas-wrapper">
+          <div class="instructions-help-button-container">
+            <button
+              id="instructionsHelpButton"
+              class="instructions-help-button"
+              type="button"
+              aria-haspopup="dialog"
+              aria-controls="instructionsDialog"
+              aria-expanded="false"
+              hidden
+            >
+              Show help
+            </button>
+          </div>
           <canvas id="planCanvas" aria-label="Plan canvas"></canvas>
           <div id="suggestionButtons" class="suggestion-buttons" aria-live="polite"></div>
           <section class="metrics-overlay" aria-label="Live metrics" aria-live="polite">

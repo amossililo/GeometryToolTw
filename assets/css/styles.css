@@ -346,6 +346,22 @@ aside p {
   transition: background 0.2s ease;
 }
 
+.instructions-help-button-container {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  display: none;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.instructions-help-button-container .instructions-help-button {
+  pointer-events: auto;
+}
+
 .instructions-help-button:hover {
   background: #f3f4f6;
 }
@@ -728,10 +744,18 @@ canvas {
 }
 
 @media (max-width: 720px) {
+  .has-instructions-dialog .instructions-help-button-container {
+    display: flex;
+  }
+
   .has-instructions-dialog .instructions-help-button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+  }
+
+  .has-instructions-dialog .canvas-wrapper {
+    padding-top: 64px;
   }
 
   .has-instructions-dialog .instructions-card {
