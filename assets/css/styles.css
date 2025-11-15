@@ -348,7 +348,7 @@ aside p {
 
 .instructions-help-button-container {
   position: absolute;
-  top: 16px;
+  top: 0;
   left: 50%;
   transform: translateX(-50%);
   width: 100%;
@@ -755,7 +755,7 @@ canvas {
   }
 
   .has-instructions-dialog .canvas-wrapper {
-    padding-top: 64px;
+    padding-top: 0;
   }
 
   .has-instructions-dialog .instructions-card {
